@@ -106,7 +106,7 @@ parser.add_argument('--eos',
 # --flux=[name] argument
 parser.add_argument('--flux',
                     default='default',
-                    choices=['default', 'hlle', 'hllc', 'lhllc', 'hlld', 'lhlld', 'roe', 'llf'], # noqa
+                    choices=['default', 'hlle', 'hllc', 'lhllc', 'hlld', 'lhlld', 'roe', 'llf', 'hlle_mod'], # noqa
                     help='select Riemann solver')
 
 # --nghost=[value] argument
@@ -387,6 +387,10 @@ if args['flux'] == 'lhlld' and args['eos'] == 'isothermal':
     raise SystemExit('### CONFIGURE ERROR: LHLLD flux cannot be used with isothermal EOS') # noqa
 if args['flux'] == 'lhlld' and not args['b']:
     raise SystemExit('### CONFIGURE ERROR: LHLLD flux can only be used with MHD')
+if args['flux'] == 'hlle_mod' and not args['b']:
+    raise SystemExit('### CONFIGURE ERROR: hlle_mod flux can only be used with MHD')
+if args['flux'] == 'hlle_mod' and (args['s'] or args['g']):
+    raise SystemExit('### CONFIGURE ERROR: hlle_mod flux is incompatible with relativity') # noqa
 
 # Check relativity
 if args['s'] and args['g']:
@@ -494,7 +498,7 @@ if args['b']:
         makefile_options['EOS_FILE'] += '_mhd'
     definitions['NFIELD_VARIABLES'] = '3'
     makefile_options['RSOLVER_DIR'] = 'mhd/'
-    if args['flux'] == 'hlle' or args['flux'] == 'llf' or args['flux'] == 'roe':
+    if args['flux'] == 'hlle' or args['flux'] == 'llf' or args['flux'] == 'roe' or args['flux'] == 'hlle_mod':
         makefile_options['RSOLVER_FILE'] += '_mhd'
     if args['eos'] == 'isothermal':
         definitions['NWAVE_VALUE'] = '6'

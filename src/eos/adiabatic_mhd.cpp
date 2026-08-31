@@ -143,6 +143,13 @@ Real EquationOfState::SoundSpeed(const Real prim[NHYDRO]) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn Real EquationOfState::Alfven(const Real prim[], const Real bx)
+//! \brief returns Alfven given vector of primitive variables
+Real EquationOfState::AlfvenSpeed(const Real prim[(NWAVE)], const Real bx) {
+    return bx/std::sqrt(prim[IDN]);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn Real EquationOfState::FastMagnetosonicSpeed(const Real prim[], const Real bx)
 //! \brief returns fast magnetosonic speed given vector of primitive variables
 //! Note the formula for (C_f)^2 is positive definite, so this func never returns a NaN

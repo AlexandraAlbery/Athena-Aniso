@@ -118,6 +118,7 @@ class Hydro {
   TimeStepFunc UserTimeStep_;
 
   void AddDiffusionFluxes();
+  void AddDiffusionFluxes_Disp();
   Real GetWeightForCT(Real dflx, Real rhol, Real rhor, Real dx, Real dt);
 };
 #endif // HYDRO_HYDRO_HPP_

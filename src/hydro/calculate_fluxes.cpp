@@ -7,8 +7,6 @@
 //! \brief Calculate hydro/MHD fluxes
 
 // C headers
-#include <iostream>   // endl
-#include <sstream>    // stringstream
 
 // C++ headers
 #include <algorithm>   // min,max
@@ -83,14 +81,7 @@ void Hydro::CalculateFluxes(AthenaArray<Real> &w, FaceField &b,
       } else if (order == 2) {
         pmb->precon->PiecewiseLinearX1(k, j, is-1, ie+1, w, bcc, wl_, wr_);
       } else {
-        if (pmb->precon->rec3m_ == REC3METHOD::PPMF)
-          pmb->precon->PiecewiseParabolicFastX1(k, j, is-1, ie+1, w, bcc, wl_, wr_);
-        else if (pmb->precon->rec3m_ == REC3METHOD::WENOZ)
-          pmb->precon->WENOZX1(k, j, is-1, ie+1, w, bcc, wl_, wr_);
-        else if (pmb->precon->rec3m_ == REC3METHOD::WENOMZ)
-          pmb->precon->WENOMZX1(k, j, is-1, ie+1, w, bcc, wl_, wr_);
-        else
-          pmb->precon->PiecewiseParabolicX1(k, j, is-1, ie+1, w, bcc, wl_, wr_);
+        pmb->precon->PiecewiseParabolicX1(k, j, is-1, ie+1, w, bcc, wl_, wr_);
       }
 
       pmb->pcoord->CenterWidth1(k, j, is, ie+1, dxw_);
@@ -188,14 +179,7 @@ void Hydro::CalculateFluxes(AthenaArray<Real> &w, FaceField &b,
       } else if (order == 2) {
         pmb->precon->PiecewiseLinearX2(k, js-1, il, iu, w, bcc, wl_, wr_);
       } else {
-        if (pmb->precon->rec3m_ == REC3METHOD::PPMF)
-          pmb->precon->PiecewiseParabolicFastX2(k, js-1, il, iu, w, bcc, wl_, wr_);
-        else if (pmb->precon->rec3m_ == REC3METHOD::WENOZ)
-          pmb->precon->WENOZX2(k, js-1, il, iu, w, bcc, wl_, wr_);
-        else if (pmb->precon->rec3m_ == REC3METHOD::WENOMZ)
-          pmb->precon->WENOMZX2(k, js-1, il, iu, w, bcc, wl_, wr_);
-        else
-          pmb->precon->PiecewiseParabolicX2(k, js-1, il, iu, w, bcc, wl_, wr_);
+        pmb->precon->PiecewiseParabolicX2(k, js-1, il, iu, w, bcc, wl_, wr_);
       }
       for (int j=js; j<=je+1; ++j) {
         // reconstruct L/R states at j
@@ -204,14 +188,7 @@ void Hydro::CalculateFluxes(AthenaArray<Real> &w, FaceField &b,
         } else if (order == 2) {
           pmb->precon->PiecewiseLinearX2(k, j, il, iu, w, bcc, wlb_, wr_);
         } else {
-          if (pmb->precon->rec3m_ == REC3METHOD::PPMF)
-            pmb->precon->PiecewiseParabolicFastX2(k, j, il, iu, w, bcc, wlb_, wr_);
-          else if (pmb->precon->rec3m_ == REC3METHOD::WENOZ)
-            pmb->precon->WENOZX2(k, j, il, iu, w, bcc, wlb_, wr_);
-          else if (pmb->precon->rec3m_ == REC3METHOD::WENOMZ)
-            pmb->precon->WENOMZX2(k, j, il, iu, w, bcc, wlb_, wr_);
-          else
-            pmb->precon->PiecewiseParabolicX2(k, j, il, iu, w, bcc, wlb_, wr_);
+          pmb->precon->PiecewiseParabolicX2(k, j, il, iu, w, bcc, wlb_, wr_);
         }
 
         pmb->pcoord->CenterWidth2(k, j, il, iu, dxw_);
@@ -308,14 +285,7 @@ void Hydro::CalculateFluxes(AthenaArray<Real> &w, FaceField &b,
       } else if (order == 2) {
         pmb->precon->PiecewiseLinearX3(ks-1, j, il, iu, w, bcc, wl_, wr_);
       } else {
-        if (pmb->precon->rec3m_ == REC3METHOD::PPMF)
-          pmb->precon->PiecewiseParabolicFastX3(ks-1, j, il, iu, w, bcc, wl_, wr_);
-        else if (pmb->precon->rec3m_ == REC3METHOD::WENOZ)
-          pmb->precon->WENOZX3(ks-1, j, il, iu, w, bcc, wl_, wr_);
-        else if (pmb->precon->rec3m_ == REC3METHOD::WENOMZ)
-          pmb->precon->WENOMZX3(ks-1, j, il, iu, w, bcc, wl_, wr_);
-        else
-          pmb->precon->PiecewiseParabolicX3(ks-1, j, il, iu, w, bcc, wl_, wr_);
+        pmb->precon->PiecewiseParabolicX3(ks-1, j, il, iu, w, bcc, wl_, wr_);
       }
       for (int k=ks; k<=ke+1; ++k) {
         // reconstruct L/R states at k
@@ -324,14 +294,7 @@ void Hydro::CalculateFluxes(AthenaArray<Real> &w, FaceField &b,
         } else if (order == 2) {
           pmb->precon->PiecewiseLinearX3(k, j, il, iu, w, bcc, wlb_, wr_);
         } else {
-          if (pmb->precon->rec3m_ == REC3METHOD::PPMF)
-            pmb->precon->PiecewiseParabolicFastX3(k, j, il, iu, w, bcc, wlb_, wr_);
-          else if (pmb->precon->rec3m_ == REC3METHOD::WENOZ)
-            pmb->precon->WENOZX3(k, j, il, iu, w, bcc, wlb_, wr_);
-          else if (pmb->precon->rec3m_ == REC3METHOD::WENOMZ)
-            pmb->precon->WENOMZX3(k, j, il, iu, w, bcc, wlb_, wr_);
-          else
-            pmb->precon->PiecewiseParabolicX3(k, j, il, iu, w, bcc, wlb_, wr_);
+          pmb->precon->PiecewiseParabolicX3(k, j, il, iu, w, bcc, wlb_, wr_);
         }
 
         pmb->pcoord->CenterWidth3(k, j, il, iu, dxw_);
@@ -408,9 +371,8 @@ void Hydro::CalculateFluxes(AthenaArray<Real> &w, FaceField &b,
     } // end if (order == 4)
   }
 
-  if (!STS_ENABLED)
-    AddDiffusionFluxes();
-
+  if (!STS_ENABLED) AddDiffusionFluxes();
+  else AddDiffusionFluxes_Disp();
   return;
 }
 
@@ -422,20 +384,52 @@ void Hydro::CalculateFluxes_STS() {
   AddDiffusionFluxes();
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::AddDiffusionFluxes
+//! \brief Add Diffusion Fluxes. This will add only parabolic if STS is on
+// or both parabolic+hyperbolic if STS is off
 void Hydro::AddDiffusionFluxes() {
   Field *pf = pmy_block->pfield;
   // add diffusion fluxes
   if (hdif.hydro_diffusion_defined) {
-    if (hdif.nu_iso > 0.0 || hdif.nu_aniso > 0.0)
+    if (hdif.viscosity_on)
       hdif.AddDiffusionFlux(hdif.visflx,flux);
     if (NON_BAROTROPIC_EOS) {
-      if (hdif.kappa_iso > 0.0 || hdif.kappa_aniso > 0.0)
+      if (hdif.conduction_on)
         hdif.AddDiffusionEnergyFlux(hdif.cndflx,flux);
     }
   }
   if (MAGNETIC_FIELDS_ENABLED && NON_BAROTROPIC_EOS) {
-    if (pf->fdif.field_diffusion_defined)
+    if (pf->fdif.field_oa_defined)
       pf->fdif.AddPoyntingFlux(pf->fdif.pflux);
+    if (pf->fdif.use_TE_para || pf->fdif.use_TE_perp || pf->fdif.use_TE_wedge)
+      hdif.AddDiffusionEnergyFlux(pf->fdif.teflx, flux);
+    if (!STS_ENABLED && pf->fdif.field_disp_defined)
+      pf->fdif.AddPoyntingFlux(pf->fdif.pflux_disp);
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Hydro::AddDiffusionFluxes_Disp
+//! \brief Add only hyperbolic diffusion fluxes when STS is on.
+void Hydro::AddDiffusionFluxes_Disp() {
+  Field *pf = pmy_block->pfield;
+  // add diffusion fluxes
+  if (hdif.hydro_disp_defined) {
+    if (hdif.nu_aniso_wedge1 > 0.0 || hdif.nu_aniso_wedge2 > 0.0) {
+      hdif.AddDiffusionFlux(hdif.visflx_disp,flux);
+      }
+    if (NON_BAROTROPIC_EOS) {
+      if (hdif.kappa_aniso_wedge > 0.0)
+        hdif.AddDiffusionEnergyFlux(hdif.cndflx_disp,flux);
+    }
+  }
+  if (MAGNETIC_FIELDS_ENABLED && NON_BAROTROPIC_EOS) {
+    if (pf->fdif.field_disp_defined)
+      pf->fdif.AddPoyntingFlux(pf->fdif.pflux_disp);
+    if (pf->fdif.use_TE_para || pf->fdif.use_TE_perp)
+      hdif.AddDiffusionEnergyFlux(pf->fdif.teflx_disp, flux);
   }
   return;
 }

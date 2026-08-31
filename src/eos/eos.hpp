@@ -88,6 +88,7 @@ class EquationOfState {
   Real FastMagnetosonicSpeed(const Real[], const Real) {return 0.0;}
 #else  // Newtonian MHD
 #pragma omp declare simd simdlen(SIMD_WIDTH) uniform(this)
+  Real AlfvenSpeed(const Real prim[(NWAVE)], const Real bx);
   Real FastMagnetosonicSpeed(const Real prim[(NWAVE)], const Real bx);
 #endif  // !MAGNETIC_FIELDS_ENABLED
   void SoundSpeedsSR(Real, Real, Real, Real, Real *, Real *) {return;}

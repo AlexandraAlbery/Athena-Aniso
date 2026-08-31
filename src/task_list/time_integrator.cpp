@@ -905,23 +905,21 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
   // Now assemble list of tasks for each stage of time integrator
   {using namespace HydroIntegratorTaskNames; // NOLINT (build/namespace)
     // calculate hydro/field diffusive fluxes
-    if (!STS_ENABLED) {
-      AddTask(DIFFUSE_HYD,NONE);
-      if (MAGNETIC_FIELDS_ENABLED) {
-        AddTask(DIFFUSE_FLD,NONE);
-        // compute hydro fluxes, integrate hydro variables
-        AddTask(CALC_HYDFLX,(DIFFUSE_HYD|DIFFUSE_FLD));
-      } else { // Hydro
-        AddTask(CALC_HYDFLX,DIFFUSE_HYD);
-      }
-      if (NSCALARS > 0) {
+    // (with STS on, this pass builds ONLY the non-STS-able dispersive fluxes)
+    AddTask(DIFFUSE_HYD,NONE);
+    if (MAGNETIC_FIELDS_ENABLED) {
+      AddTask(DIFFUSE_FLD,NONE);
+      AddTask(CALC_HYDFLX,(DIFFUSE_HYD|DIFFUSE_FLD));
+    } else { // Hydro
+      AddTask(CALC_HYDFLX,DIFFUSE_HYD);
+    }
+    if (NSCALARS > 0) {
+      if (!STS_ENABLED) { // no dispersive scalar diffusion
         AddTask(DIFFUSE_SCLR,NONE);
         AddTask(CALC_SCLRFLX,(CALC_HYDFLX|DIFFUSE_SCLR));
-      }
-    } else { // STS enabled:
-      AddTask(CALC_HYDFLX,NONE);
-      if (NSCALARS > 0)
+      } else {
         AddTask(CALC_SCLRFLX,CALC_HYDFLX);
+      }
     }
     if (pm->multilevel || SHEAR_PERIODIC) { // SMR or AMR or shear periodic
       AddTask(SEND_HYDFLX,CALC_HYDFLX);
@@ -1026,7 +1024,7 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
       } else {
         AddTask(INT_SCLR,CALC_SCLRFLX);
       }
-      AddTask(INT_CHM,(INT_HYD|INT_SCLR));
+      AddTask(INT_CHM,INT_SCLR);
       if (ORBITAL_ADVECTION) {
         AddTask(SEND_SCLR,CALC_HYDORB);
         AddTask(RECV_SCLR,NONE);
@@ -1924,16 +1922,18 @@ TaskStatus TimeIntegratorTaskList::DiffuseHydro(MeshBlock *pmb, int stage) {
   if (!(ph->hdif.hydro_diffusion_defined)
       || pmb->pmy_mesh->fluid_setup != FluidFormulation::evolve) return TaskStatus::next;
 
+  // with STS on, this pass builds ONLY the dispersive fluxes; if there are none,
+  // there is nothing for the main integrator to compute
+  if (STS_ENABLED && !ph->hdif.hydro_disp_defined) return TaskStatus::next;
+
   if (stage <= nstages) {
-    if (stage_wghts[stage-1].main_stage ||
-        pmb->pmy_mesh->sts_loc == TaskType::op_split_before ||
-        pmb->pmy_mesh->sts_loc == TaskType::op_split_after) {
-      // if using orbital advection, put modified conservative into the function
+    if (stage_wghts[stage-1].main_stage) {
+          // if using orbital advection, put modified conservative into the function
       if (pmb->porb->orbital_advection_defined) {
         pmb->porb->ConvertOrbitalSystem(ph->w, ph->u, OrbitalTransform::prim);
-        ph->hdif.CalcDiffusionFlux(ph->w, pmb->porb->w_orb, pf->bcc);
+        ph->hdif.CalcDiffusionFlux(ph->w, pmb->porb->w_orb, pf->bcc, !STS_ENABLED, true);
       } else {
-        ph->hdif.CalcDiffusionFlux(ph->w, ph->w, pf->bcc);
+        ph->hdif.CalcDiffusionFlux(ph->w, ph->w, pf->bcc, !STS_ENABLED, true);
       }
     }
     return TaskStatus::next;
@@ -1941,22 +1941,18 @@ TaskStatus TimeIntegratorTaskList::DiffuseHydro(MeshBlock *pmb, int stage) {
   return TaskStatus::fail;
 }
 
+
 //----------------------------------------------------------------------------------------
 //! Functions to calculate diffusion EMF
 
 TaskStatus TimeIntegratorTaskList::DiffuseField(MeshBlock *pmb, int stage) {
   Field *pf = pmb->pfield;
 
-  // return if there are no diffusion to be added
   if (!(pf->fdif.field_diffusion_defined)) return TaskStatus::next;
+  if (STS_ENABLED && !pf->fdif.field_disp_defined) return TaskStatus::next;
 
   if (stage <= nstages) {
-    if (stage_wghts[stage-1].main_stage ||
-        pmb->pmy_mesh->sts_loc == TaskType::op_split_before ||
-        pmb->pmy_mesh->sts_loc == TaskType::op_split_after) {
-      // TODO(pdmullen): DiffuseField is also called in SuperTimeStepTaskLsit.
-      // It must skip Hall effect (once implemented) diffusion process in STS
-      // and always calculate those terms in the main integrator.
+    if (stage_wghts[stage-1].main_stage) {
       pf->fdif.CalcDiffusionEMF(pf->b, pf->bcc, pf->e);
     }
     return TaskStatus::next;

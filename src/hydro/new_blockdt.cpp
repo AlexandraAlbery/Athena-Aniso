@@ -46,6 +46,7 @@ void Hydro::NewBlockTimeStep() {
   MeshBlock *pmb = pmy_block;
   int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
   int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+  int nc1 = pmb->ncells1; int nc2 = pmb->ncells2; int nc3 = pmb->ncells3;
   AthenaArray<Real> &w = pmb->phydro->w;
   // hyperbolic timestep constraint in each (x1-slice) cell along coordinate direction:
   AthenaArray<Real> &dt1 = dt1_, &dt2 = dt2_, &dt3 = dt3_;  // (x1 slices)
@@ -55,12 +56,18 @@ void Hydro::NewBlockTimeStep() {
   Real min_dt = real_max;
   // Note, "dt_hyperbolic" currently refers to the dt limit imposed by evoluiton of the
   // ideal hydro or MHD fluid by the main integrator (even if not strictly hyperbolic)
+  // and dispersive non-ideal terms (thermal wedge term, gyro-viscoisty, Hall, and
+  // Peltier/Seebeck).
   Real min_dt_hyperbolic  = real_max;
   // TODO(felker): consider renaming dt_hyperbolic after general execution model is
   // implemented and flexibility from #247 (zero fluid configurations) is
   // addressed. dt_hydro, dt_main (inaccurate since "dt" is actually main), dt_MHD?
   Real min_dt_parabolic  = real_max;
   Real min_dt_user  = real_max;
+
+  // uses for 1/dt_ideal + 1/dt_dispersive when STS is enabled
+  AthenaArray<Real> inv_dt_ideal(nc3, nc2, nc1);
+  inv_dt_ideal.ZeroClear();
 
   Real cspeed = 0.0;
   if(NR_RADIATION_ENABLED)
@@ -110,6 +117,11 @@ void Hydro::NewBlockTimeStep() {
               cf = pmb->peos->FastMagnetosonicSpeed(wi,bx);
               speed = std::max(cspeed,(std::abs(wi[IVZ]) + cf));
               dt3(i) /= (speed);
+
+              Real dtc = dt1(i);
+              if (pmb->block_size.nx2 > 1) dtc = std::min(dtc, dt2(i));
+              if (pmb->block_size.nx3 > 1) dtc = std::min(dtc, dt3(i));
+              inv_dt_ideal(k,j,i) = 1.0/dtc;
             } else {
               Real cs = pmb->peos->SoundSpeed(wi);
               Real speed1 = std::max(cspeed, (std::abs(wi[IVX]) + cs));
@@ -118,11 +130,21 @@ void Hydro::NewBlockTimeStep() {
               dt1(i) /= (speed1);
               dt2(i) /= (speed2);
               dt3(i) /= (speed3);
+
+              Real dtc = dt1(i);
+              if (pmb->block_size.nx2 > 1) dtc = std::min(dtc, dt2(i));
+              if (pmb->block_size.nx3 > 1) dtc = std::min(dtc, dt3(i));
+              inv_dt_ideal(k,j,i) = 1.0/dtc;
             }
           } else { // FluidFormulation::background or disabled. Assume scalar advection:
             dt1(i) /= (std::abs(wi[IVX]));
             dt2(i) /= (std::abs(wi[IVY]));
             dt3(i) /= (std::abs(wi[IVZ]));
+
+            Real dtc = dt1(i);
+            if (pmb->block_size.nx2 > 1) dtc = std::min(dtc, dt2(i));
+            if (pmb->block_size.nx3 > 1) dtc = std::min(dtc, dt3(i));
+            inv_dt_ideal(k,j,i) = 1.0/dtc;
           }
         }
       }
@@ -169,31 +191,86 @@ void Hydro::NewBlockTimeStep() {
   }
 
   // calculate the timestep limited by the diffusion processes
+  Real min_dt_vis = real_max, min_dt_cnd = real_max;
+  Real min_dt_vis_disp = real_max, min_dt_cnd_disp = real_max;
+  Real min_dt_oa = real_max, min_dt_hall = real_max, min_dt_OAH = real_max;
+  Real min_dt_TE = real_max; Real min_dt_TE_para = real_max;
+  Real min_dt_TE_hyp = real_max;
+  FieldDiffusion &fdif_ = pmb->pfield->fdif;
+
   if (hdif.hydro_diffusion_defined) {
-    Real min_dt_vis, min_dt_cnd;
-    hdif.NewDiffusionDt(min_dt_vis, min_dt_cnd);
-    min_dt_parabolic = std::min(min_dt_parabolic, min_dt_vis);
-    min_dt_parabolic = std::min(min_dt_parabolic, min_dt_cnd);
-  } // hydro diffusion
+    hdif.NewDiffusionDt(min_dt_vis, min_dt_cnd, min_dt_vis_disp, min_dt_cnd_disp,
+                        hdif.inv_dt_cnd, hdif.inv_dt_visc, hdif.inv_dt_cnd_disp,
+                        hdif.inv_dt_vis_disp);
+  }
 
   if (MAGNETIC_FIELDS_ENABLED &&
-      pmb->pfield->fdif.field_diffusion_defined) {
-    Real min_dt_oa, min_dt_hall;
-    pmb->pfield->fdif.NewDiffusionDt(min_dt_oa, min_dt_hall);
-    min_dt_parabolic = std::min(min_dt_parabolic, min_dt_oa);
-    // Hall effect is dispersive, not diffusive:
-    min_dt_hyperbolic = std::min(min_dt_hyperbolic, min_dt_hall);
-  } // field diffusion
+      fdif_.field_diffusion_defined) {
+      fdif_.NewDiffusionDt(min_dt_oa, min_dt_hall, min_dt_OAH, min_dt_TE_para,
+                           fdif_.inv_dt_OAH, fdif_.inv_dt_TE, fdif_.inv_dt_TE_hyp);
+  }
+
+
+  // Diffusion + dispersion with STS integration
+  const bool hd_on = hdif.hydro_diffusion_defined;
+  const bool fd_on = MAGNETIC_FIELDS_ENABLED && fdif_.field_diffusion_defined;
+  const bool te_active = MAGNETIC_FIELDS_ENABLED
+                          && pmb->pfield->fdif.field_diffusion_defined
+                          && (pmb->pfield->fdif.use_TE_para ||
+                              pmb->pfield->fdif.use_TE_perp ||
+                              pmb->pfield->fdif.use_TE_wedge);
+  const bool disp_active =
+        (hd_on && (hdif.cnd_disp_defined || hdif.visc_disp_defined)) ||
+        (fd_on && (fdif_.eta_hall > 0.0 || fdif_.use_TE_para || fdif_.use_TE_perp));
+
+  if (STS_ENABLED) {
+    // Parabolic: therm, visc, oa+ft_w
+    min_dt_parabolic = std::min({min_dt_parabolic, min_dt_vis, min_dt_cnd,
+                                 min_dt_oa, min_dt_TE_para});
+    // Hyperbolic: ideal + right-ledeuc + hall/peltier/seebeck, gyro-visc
+    if (disp_active) {
+      for (int k=ks; k<=ke; ++k) {
+        for (int j=js; j<=je; ++j) {
+          for (int i=is; i<=ie; ++i) {
+            Real inv = 0.0;
+            if (fd_on) inv = fdif_.inv_dt_TE_hyp(k,j,i);
+            if (hd_on) inv = std::max(inv, hdif.inv_dt_vis_disp(k,j,i));
+            Real inv_disp = inv;
+            if (hd_on) inv_disp += hdif.inv_dt_cnd_disp(k,j,i);
+            if (inv_disp > 0.0)
+              min_dt_hyperbolic = std::min(min_dt_hyperbolic,
+                                           1.0/(inv_dt_ideal(k,j,i) + inv_disp));
+          }
+        }
+      }
+    }
+  } else {
+    // unsplit: ideal kept separate; diffusion inverse-summed per cell
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          Real inv_tot = 0.0;
+          if (hd_on) inv_tot += hdif.inv_dt_cnd(k,j,i) + hdif.inv_dt_visc(k,j,i);
+          if (fd_on) {
+            inv_tot += fdif_.inv_dt_OAH(k,j,i);
+            if (te_active) inv_tot += fdif_.inv_dt_TE(k,j,i);
+          }
+          if (inv_tot > 0.0)
+            min_dt_hyperbolic = std::min(min_dt_hyperbolic, 1.0/inv_tot);
+        }
+      }
+    }
+  }
 
   if (NSCALARS > 0 && pmb->pscalars->scalar_diffusion_defined) {
     Real min_dt_scalar_diff = pmb->pscalars->NewDiffusionDt();
     min_dt_parabolic = std::min(min_dt_parabolic, min_dt_scalar_diff);
   } // passive scalar diffusion
 
-  min_dt_hyperbolic *= pmb->pmy_mesh->cfl_number;
   // scale the theoretical stability limit by a safety factor = the hyperbolic CFL limit
   // (user-selected or automaticlaly enforced). May add independent parameter "cfl_diff"
   // in the future (with default = cfl_number).
+  min_dt_hyperbolic *= pmb->pmy_mesh->cfl_number;
   min_dt_parabolic *= pmb->pmy_mesh->cfl_number;
 
   if (IM_RADIATION_ENABLED) {
@@ -210,16 +287,11 @@ void Hydro::NewBlockTimeStep() {
   // set main integrator timestep as the minimum of the appropriate timestep constraints:
   // hyperbolic: (skip if fluid is nonexistent or frozen)
   min_dt = std::min(min_dt, min_dt_hyperbolic);
+  min_dt = std::min(min_dt, min_dt_parabolic);
   // user:
   if (UserTimeStep_ != nullptr) {
     min_dt_user = UserTimeStep_(pmb);
     min_dt = std::min(min_dt, min_dt_user);
-  }
-  // parabolic:
-  // STS handles parabolic terms -> then take the smaller of hyperbolic or user timestep
-  if (!STS_ENABLED) {
-    // otherwise, take the smallest of the hyperbolic, parabolic, user timesteps
-    min_dt = std::min(min_dt, min_dt_parabolic);
   }
   pmb->new_block_dt_ = min_dt;
   pmb->new_block_dt_hyperbolic_ = min_dt_hyperbolic;
