@@ -8,8 +8,7 @@ This allows for neutral gas to behave isotropically and ionised gas to behave an
 
 $\vec{q}_{\text{neu}}$ is isotropic thermal conductivity: $\vec{q}_{\text{neu}} = -\kappa_{\text{neu}}\nabla[T]$,
 
-$\vec{q}_{\text{ion}}$ is split in to six parts. The first three are the anisotropic thermal conduction and are defined in hydro_diffusion.
-The last three are the thermal conduction due to the thermoelectric force and are defined in field_diffusion.
+$\vec{q}_{\text{ion}}$ is split in to three parts
 
 $\vec{q}_{\text{ion}} = \vec{q}_{\parallel} + \vec{q}_{\perp} + \vec{q}_{\wedge},$
 
@@ -17,9 +16,20 @@ $\vec{q}_{\parallel}=-\kappa_{\parallel}(\hat{b}\cdot\nabla [T])\hat{b},$
 
 $\vec{q}_{\perp} = -\kappa_{\perp}(\nabla[T] - (\hat{b}\cdot\nabla[T])\hat{b}),$
 
-$\vec{q}_{\wedge} = -\kappa_{\wedge}\hat{b}\times\nabla[T].$
+$\vec{q}_{\wedge} = -\kappa_{\wedge}\hat{b}\times\nabla[T].
+
+the ionisating fraction (for all processes) is accesed from
+HydroDiffusion::ion_frac(k,j,i).
+Ionisation weighting is only enabled if neutral diffusion is enabled.
+
+The thermal conduction coefficients can be accessed from
+kappa(HydroDiffusion::DiffProcess::kappa_neutral,k,j,i),
+kappa(HydroDiffusion::DiffProcess::kappa_para,k,j,i),
+kappa(HydroDiffusion::DiffProcess::kappa_perp,k,j,i),
+kappa(HydroDiffusion::DiffProcess::kappa_wedge,k,j,i).
 
 THERMOELECTRIC EFFECTS
+Thermoelectric effects are split in to two parts: thermoelectric conduction $\vec{q}_{J}$ and thermoelectric force $\vec{F}_{T}$. Both are called in field diffusion
 
 $\vec{q}_{J,\parallel} = -\kappa_{J,\parallel}(\hat{b}\cdot\vec{J})\hat{b}.$
 
@@ -72,10 +82,17 @@ nu_aniso_neutral{pin->GetOrAddReal("problem", "nu_aniso_neutral", 0.0)}, // neut
 nu_aniso_para{pin->GetOrAddReal("problem", "nu_aniso_para", 0.0)}, // parallel viscosity - Pi^(0)
 nu_aniso_perp1{pin->GetOrAddReal("problem", "nu_aniso_perp1", 0.0)}, //Pi^(1)
 nu_aniso_perp2{pin->GetOrAddReal("problem", "nu_aniso_perp2", 0.0)}, //Pi^(2)
-nu_aniso_wedge1{pin->GetOrAddReal("HydroDiffusion::problem", "nu_aniso_wedge1", 0.0)}, //Pi^(3)
+nu_aniso_wedge1{pin->GetOrAddReal("problem", "nu_aniso_wedge1", 0.0)}, //Pi^(3)
 nu_aniso_wedge2{pin->GetOrAddReal("problem", "nu_aniso_wedge2", 0.0)}, //Pi^(4)
 
-These are access via: HydroDiffusion::nu_neutral, HydroDiffusion::nu_para, HydroDiffusion::nu_perp1, HydroDiffusion::nu_perp2, HydroDiffusion::nu_wedge1, HydroDiffusion::nu_wedge2
+These are access via: These are accessed via:
+nu(HydroDiffusion::DiffProcess::nu_neutral,k,j,i),
+nu(HydroDiffusion::DiffProcess::nu_para,k,j,i),
+nu(HydroDiffusion::DiffProcess::nu_perp1,k,j,i),
+nu(HydroDiffusion::DiffProcess::nu_perp2,k,j,i),
+nu(HydroDiffusion::DiffProcess::nu_wedge1,k,j,i), 
+nu(HydroDiffusion::DiffProcess::nu_wedge2,k,j,i).
+
 Due to the constants out the front, it is recomended to calculate actual parallel and wedge kinemtic viscosity coefficents and pass the same value to perp1 and perp2, and wedge1 and wedge2.
 nu_neutral, nu_para, nu_perp1, nu_perp2, nu_wedge1, and nu_wedge2 must be supplied as diffusivities with dimensions of L^{2} T^{-1}. The same as isotropic case.
 As with thermal conduction (1- \text{HII}_{\text{frac}})\boldsymbol{\Pi}_{\text{neu}} is the isotropic viscosity weighted by ionisation fraction.
@@ -86,3 +103,4 @@ BULK VISCOSITY
 Bulk viscosity is implemented as: \boldsymbol{\Pi}_{\text{bulk}} = \zeta(\nabla\cdot\vv{v})\boldsymbol{I}. It can be activated via: zeta_bulk = pin->GetOrAddReal("problem", "zeta_bulk", 0.0).
 It is passed to HydroDiffusion::zeta_bulk in the problem generator in the EnrollViscosityCoefficient function.
 As bulk viscosity only effects molecules. It is recomended to weight by molecular mass fractions if the simulation tracks thermodynamics states or chemistry and enters partially atomic, fully atomic, partially ionised or fully ionised regimes.
+Bulk viscoisty should be pssed in units of $L$
