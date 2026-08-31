@@ -226,7 +226,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
         x1flux(k,j,i) += iso_flux + para_flux + perp_flux;
       if(use_wedge) {
         x1flux_disp(k,j,i) += wedge_flux;
-          if(!STS_ENABLED) x1flux(k,j,i) += x1flux_disp(k,j,i);
+          if(!STS_ENABLED) x1flux(k,j,i) += wedge_flux;
         } // end if edge
       } // i loop
     } // j loop
@@ -305,7 +305,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
         x2flux(k,j,i) += iso_flux + para_flux + perp_flux;
       if(use_wedge) {
         x2flux_disp(k,j,i) += wedge_flux;
-        if(!STS_ENABLED) x2flux(k,j,i) += x2flux_disp(k,j,i);
+        if(!STS_ENABLED) x2flux(k,j,i) += wedge_flux;
           } // end if wedge
         } // i loop
       } // j loop
@@ -391,7 +391,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
           x3flux(k,j,i) += iso_flux + para_flux + perp_flux;
         if(use_wedge) {
           x3flux_disp(k,j,i) += wedge_flux;
-            if(!STS_ENABLED) x3flux(k,j,i) += x3flux_disp(k,j,i);
+            if(!STS_ENABLED) x3flux(k,j,i) += wedge_flux;
            } // end edge
           } // i loop
         } // j loop

@@ -631,9 +631,9 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
         x1flux_disp(IM2,k,j,i) += Pi_xy_disp;
         x1flux_disp(IM3,k,j,i) += Pi_xz_disp;
           if(!STS_ENABLED) {
-            x1flux(IM1,k,j,i) += x1flux_disp(IM1,k,j,i);
-            x1flux(IM2,k,j,i) += x1flux_disp(IM2,k,j,i);
-            x1flux(IM3,k,j,i) += x1flux_disp(IM3,k,j,i);
+            x1flux(IM1,k,j,i) += Pi_xx_disp;
+            x1flux(IM2,k,j,i) += Pi_xy_disp;
+            x1flux(IM3,k,j,i) += Pi_xz_disp;
           }
         }
         if (NON_BAROTROPIC_EOS) {
@@ -646,7 +646,9 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
                                           (p(IM2,k,j,i-1) + p(IM2,k,j,i))*Pi_xy_disp +
                                           (p(IM3,k,j,i-1) + p(IM3,k,j,i))*Pi_xz_disp);
             if(!STS_ENABLED)
-              x1flux(IEN,k,j,i) += x1flux_disp(IEN,k,j,i);
+              x1flux(IEN,k,j,i) += 0.5*((p(IM1,k,j,i-1) + p(IM1,k,j,i))*Pi_xx_disp +
+                                        (p(IM2,k,j,i-1) + p(IM2,k,j,i))*Pi_xy_disp +
+                                        (p(IM3,k,j,i-1) + p(IM3,k,j,i))*Pi_xz_disp);
           } // end if wedge
         } // end if NON_BAROTROPIC_EOS
       } // i loop
@@ -922,9 +924,9 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
           x2flux_disp(IM2,k,j,i) += Pi_yy_disp;
           x2flux_disp(IM3,k,j,i) += Pi_yz_disp;
           if(!STS_ENABLED){
-            x2flux(IM1,k,j,i) += x2flux_disp(IM1,k,j,i);
-            x2flux(IM2,k,j,i) += x2flux_disp(IM2,k,j,i);
-            x2flux(IM3,k,j,i) += x2flux_disp(IM3,k,j,i);
+            x2flux(IM1,k,j,i) += Pi_yx_disp;
+            x2flux(IM2,k,j,i) += Pi_yy_disp;
+            x2flux(IM3,k,j,i) += Pi_yz_disp;
           }
         }
         if (NON_BAROTROPIC_EOS) {
@@ -937,7 +939,9 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
                                          (p(IM2,k,j-1,i) + p(IM2,k,j,i))*Pi_yy_disp +
                                          (p(IM3,k,j-1,i) + p(IM3,k,j,i))*Pi_yz_disp);
           if(!STS_ENABLED)
-            x2flux(IEN,k,j,i) += x2flux_disp(IEN,k,j,i);
+            x2flux(IEN,k,j,i) += 0.5*((p(IM1,k,j-1,i) + p(IM1,k,j,i))*Pi_yx_disp +
+                                      (p(IM2,k,j-1,i) + p(IM2,k,j,i))*Pi_yy_disp +
+                                      (p(IM3,k,j-1,i) + p(IM3,k,j,i))*Pi_yz_disp);
            } // end if wedge
           } // end if NON_BAROTROPIC_EOS
         } // i loop
@@ -1217,9 +1221,9 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
           x3flux_disp(IM2,k,j,i) += Pi_zy_disp;
           x3flux_disp(IM3,k,j,i) += Pi_zz_disp;
             if (!STS_ENABLED) {
-              x3flux(IM1,k,j,i) += x3flux_disp(IM1,k,j,i);
-              x3flux(IM2,k,j,i) += x3flux_disp(IM2,k,j,i);
-              x3flux(IM3,k,j,i) += x3flux_disp(IM3,k,j,i);
+              x3flux(IM1,k,j,i) += Pi_zx_disp;
+              x3flux(IM2,k,j,i) += Pi_zy_disp;
+              x3flux(IM3,k,j,i) += Pi_zz_disp;
             }
         }
           if (NON_BAROTROPIC_EOS) {
@@ -1233,7 +1237,9 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
                                              (p(IM2,k-1,j,i) + p(IM2,k,j,i))*Pi_zy_disp +
                                              (p(IM3,k-1,j,i) + p(IM3,k,j,i))*Pi_zz_disp);
               if (!STS_ENABLED)
-                x3flux(IEN,k,j,i) += x3flux_disp(IEN,k,j,i);
+                x3flux(IEN,k,j,i) += 0.5*((p(IM1,k-1,j,i) + p(IM1,k,j,i))*Pi_zx_disp +
+                                          (p(IM2,k-1,j,i) + p(IM2,k,j,i))*Pi_zy_disp +
+                                          (p(IM3,k-1,j,i) + p(IM3,k,j,i))*Pi_zz_disp);
             } // end if wedge
           } // end if NON_BAROTROPIC_EOS
         } // i loop
