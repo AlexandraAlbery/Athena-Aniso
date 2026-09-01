@@ -146,7 +146,7 @@ Real EquationOfState::SoundSpeed(const Real prim[NHYDRO]) {
 //! \fn Real EquationOfState::Alfven(const Real prim[], const Real bx)
 //! \brief returns Alfven given vector of primitive variables
 Real EquationOfState::AlfvenSpeed(const Real prim[(NWAVE)], const Real bx) {
-    return bx/std::sqrt(prim[IDN]);
+    return std::abs(bx/std::sqrt(prim[IDN]));
 }
 
 //----------------------------------------------------------------------------------------

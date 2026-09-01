@@ -428,7 +428,7 @@ void HydroDiffusion::NewDiffusionDt(Real &dt_vis, Real &dt_cnd, Real &dt_vis_dis
                                                len_perp*fac_RL/(kappa_t_disp(i)
                                                 + TINY_NUMBER)));
               inv_dt_cnd(k,j,i) += inv_dt_cnd_disp(k,j,i);
-              dt_cnd_disp = std::min(dt_cnd_disp, 1.0 / inv_dt_cnd_disp(k,j,i));
+              dt_cnd_disp = std::min<Real>(dt_cnd_disp, 1.0 / inv_dt_cnd_disp(k,j,i));
               }
             }
         kappa_t(i) *= gm1;
@@ -454,7 +454,7 @@ void HydroDiffusion::NewDiffusionDt(Real &dt_vis, Real &dt_cnd, Real &dt_vis_dis
             inv_dt_vis_disp(k,j,i) += 1.0 / (static_cast<Real>(
                                       SQR(len)*fac_gyro/(nu_t_disp(i) + TINY_NUMBER)));
             inv_dt_visc(k,j,i) += inv_dt_vis_disp(k,j,i);
-            dt_vis_disp = std::min(dt_vis_disp, 1.0 / inv_dt_vis_disp(k,j,i));
+            dt_vis_disp = std::min<Real>(dt_vis_disp, 1.0 / inv_dt_vis_disp(k,j,i));
           }
         } else {
           nu_max += zr;
@@ -500,7 +500,7 @@ inline Real HydroDiffusion::ViscAnisoEigen(const Real u, const Real HII,
 Real HydroDiffusion::ViscAnisoEigenMax(const Real HII, const Real nu_neu,
                                        const Real nu_par, const Real nu_p1,
                                        const Real nu_p2, const Real zr) {
-  Real lam = std::max(ViscAnisoEigen(0.0, HII, nu_neu, nu_par, nu_p1, nu_p2, zr),
+  Real lam = std::max<Real>(ViscAnisoEigen(0.0, HII, nu_neu, nu_par, nu_p1, nu_p2, zr),
                       ViscAnisoEigen(1.0, HII, nu_neu, nu_par, nu_p1, nu_p2, zr));
   const Real denom1 = 3.0*nu_par + nu_p1 - 16.0*nu_p2;
   if (std::fabs(denom1) > 0.0) { // u star 1
@@ -522,10 +522,11 @@ Real HydroDiffusion::ViscAnisoEigenMax(const Real HII, const Real nu_neu,
 //! \brief Calculate the maximum eigenvalue for gyro-vsicosity for u in [0,1]
 Real HydroDiffusion::GyroViscEigenMax(const Real HII, const Real nu_w1,
                                       const Real nu_w2) {
-  Real lam = std::max(HII*nu_w1, 2.0*HII*nu_w2);
+  Real lam = std::max<Real>(HII*nu_w1, 2.0*HII*nu_w2);
   const Real denom = nu_w1*(4.0*nu_w2 - nu_w1);
   if (denom > 0.0) {
-    lam = std::max(lam, 2.0*HII*std::sqrt(nu_w2*nu_w2*nu_w2*(2.0*nu_w1 + nu_w2)/denom));
+    lam = std::max<Real>(lam,
+                         2.0*HII*std::sqrt(nu_w2*nu_w2*nu_w2*(2.0*nu_w1 + nu_w2)/denom));
   }
   return lam;
 }

@@ -238,7 +238,7 @@ void Hydro::NewBlockTimeStep() {
             Real inv_disp = inv;
             if (hd_on) inv_disp += hdif.inv_dt_cnd_disp(k,j,i);
             if (inv_disp > 0.0)
-              min_dt_hyperbolic = std::min(min_dt_hyperbolic,
+              min_dt_hyperbolic = std::min<Real>(min_dt_hyperbolic,
                                            1.0/(inv_dt_ideal(k,j,i) + inv_disp));
           }
         }
@@ -256,7 +256,7 @@ void Hydro::NewBlockTimeStep() {
             if (te_active) inv_tot += fdif_.inv_dt_TE(k,j,i);
           }
           if (inv_tot > 0.0)
-            min_dt_hyperbolic = std::min(min_dt_hyperbolic, 1.0/inv_tot);
+            min_dt_hyperbolic = std::min<Real>(min_dt_hyperbolic, 1.0/inv_tot);
         }
       }
     }

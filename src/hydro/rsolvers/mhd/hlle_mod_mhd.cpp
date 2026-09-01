@@ -200,7 +200,7 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     Real af = std::sqrt(std::max(a,aw)*std::max(a,aw) + Droe/4.0
                                                       + std::sqrt(Droe*Eroe)/2.0);
 
-    Real Groe = std::max(nw1roe*nw1roe, 4.0*nw2roe*nw2roe);
+    Real Groe = std::max<Real>(nw1roe*nw1roe, 4.0*nw2roe*nw2roe);
     Real denomroe = nw1roe*(nw1roe - 4.0*nw2roe);
     if(std::abs(denomroe) > TINY_NUMBER) {
       Real u_starroe = (nw1roe*nw1roe - 2.0*nw1roe*nw2roe - 2.0*nw2roe*nw2roe)/denomroe;
@@ -237,7 +237,7 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
                         + Dr/4.0 + std::sqrt(Dr*Er)/2.0);
 
     // Gyro-viscous Wave (Velocity)
-    Real Gl = std::max(nw1l*nw1l, 4.0*nw2l*nw2l);
+    Real Gl = std::max<Real>(nw1l*nw1l, 4.0*nw2l*nw2l);
     Real denoml = nw1l*(nw1l - 4.0*nw2l);
     if(std::abs(denoml) > TINY_NUMBER) {
       Real u_starl = (nw1l*nw1l - 2.0*nw1l*nw2l - 2.0*nw2l*nw2l)/denoml;
@@ -247,7 +247,7 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
       }
     }
 
-    Real Gr = std::max(nw1r*nw1r, 4.0*nw2r*nw2r);
+    Real Gr = std::max<Real>(nw1r*nw1r, 4.0*nw2r*nw2r);
     Real denomr = nw1r*(nw1r - 4.0*nw2r);
     if(std::abs(denomr) > TINY_NUMBER) {
       Real u_starr = (nw1r*nw1r - 2.0*nw1r*nw2r - 2.0*nw2r*nw2r)/denomr;

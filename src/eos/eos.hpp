@@ -84,13 +84,15 @@ class EquationOfState {
   void ApplyPrimitiveConservedFloors(
       AthenaArray<Real> &prim, AthenaArray<Real> &cons, AthenaArray<Real> &bcc,
       int k, int j, int i);
-#if !MAGNETIC_FIELDS_ENABLED  // Newtonian hydro: Newtonian MHD defined as no-op
-  Real FastMagnetosonicSpeed(const Real[], const Real) {return 0.0;}
-#else  // Newtonian MHD
-#pragma omp declare simd simdlen(SIMD_WIDTH) uniform(this)
-  Real AlfvenSpeed(const Real prim[(NWAVE)], const Real bx);
-  Real FastMagnetosonicSpeed(const Real prim[(NWAVE)], const Real bx);
-#endif  // !MAGNETIC_FIELDS_ENABLED
+    #if !MAGNETIC_FIELDS_ENABLED  // Newtonian hydro: Newtonian MHD defined as no-op
+    Real AlfvenSpeed(const Real[], const Real) {return 0.0;}
+    Real FastMagnetosonicSpeed(const Real[], const Real) {return 0.0;}
+  #else  // Newtonian MHD
+  #pragma omp declare simd simdlen(SIMD_WIDTH) uniform(this)
+    Real AlfvenSpeed(const Real prim[(NWAVE)], const Real bx);
+  #pragma omp declare simd simdlen(SIMD_WIDTH) uniform(this)
+    Real FastMagnetosonicSpeed(const Real prim[(NWAVE)], const Real bx);
+  #endif  // !MAGNETIC_FIELDS_ENABLED
   void SoundSpeedsSR(Real, Real, Real, Real, Real *, Real *) {return;}
   void SoundSpeedsGR(Real, Real, Real, Real, Real, Real, Real, Real *, Real *)
   {return;}

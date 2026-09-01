@@ -476,7 +476,7 @@ void FieldDiffusion::NewDiffusionDt(Real &dt_oa, Real &dt_h, Real &dt_OAH,
             inv_dt_TE_hyp(k,j,i) = 1.0 / static_cast<Real>(fac_h*SQR(len(i)) /
                                                   (std::abs(etaB(DiffProcess::hall,k,j,i))
                                                   + TINY_NUMBER));
-            dt_h = std::min(dt_h, 1.0 / inv_dt_TE_hyp(k,j,i));
+            dt_h = std::min<Real>(dt_h, 1.0 / inv_dt_TE_hyp(k,j,i));
             } // i loop
         } // end hall dt
       } else { // unsplit CFL (RK3 stable, RK1/2 is too restrictve)
