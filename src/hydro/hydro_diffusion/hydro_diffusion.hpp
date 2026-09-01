@@ -121,6 +121,7 @@ class HydroDiffusion {
   AthenaArray<Real> inv_dt_cnd_disp; // 1/dt_κ_wedge needed for TE + STS hydro
   AthenaArray<Real> inv_dt_cnd; // 1/dt_κ_par_perp + 1/dt_κ_wedge
   AthenaArray<Real> inv_dt_visc; // 1/dt_nu_par_perp + 1/dt_nu_wedge
+
  private:
   Hydro *pmy_hydro_;  // ptr to Hydro containing this HydroDiffusion
   MeshBlock *pmb_;    // ptr to meshblock containing this HydroDiffusion

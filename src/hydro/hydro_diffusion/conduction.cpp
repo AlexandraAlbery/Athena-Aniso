@@ -222,12 +222,15 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
                       + kappa(DiffProcess::kappa_wedge,k,j,i-1));
         wedge_flux = -(HII*kappa_wedge*denf*(by*dTdz - bz*dTdy));
       }
-      if(use_neutral || use_para || use_perp)
+      if(use_neutral || use_para || use_perp) {
         x1flux(k,j,i) += iso_flux + para_flux + perp_flux;
+      }
       if(use_wedge) {
         x1flux_disp(k,j,i) += wedge_flux;
-          if(!STS_ENABLED) x1flux(k,j,i) += wedge_flux;
-        } // end if edge
+        if(!STS_ENABLED) {
+          x1flux(k,j,i) += wedge_flux;
+          } // end if STS
+        } // end if wedge
       } // i loop
     } // j loop
   } // k loop
@@ -295,22 +298,25 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
           kappa_perp = 0.5*(kappa(DiffProcess::kappa_perp,k,j,i)
                       + kappa(DiffProcess::kappa_perp,k,j-1,i));
           perp_flux = -(HII*kappa_perp*denf*(dTdy-by*b_dot_gradT));
-      }
-      if (use_wedge) {
-        kappa_wedge = 0.5*(kappa(DiffProcess::kappa_wedge,k,j,i)
-                      + kappa(DiffProcess::kappa_wedge,k,j-1,i));
-        wedge_flux = -(HII*kappa_wedge*denf*(bz*dTdx - bx*dTdz));
-      }
-      if(use_neutral || use_para || use_perp)
-        x2flux(k,j,i) += iso_flux + para_flux + perp_flux;
-      if(use_wedge) {
-        x2flux_disp(k,j,i) += wedge_flux;
-        if(!STS_ENABLED) x2flux(k,j,i) += wedge_flux;
-          } // end if wedge
-        } // i loop
-      } // j loop
-    } // k loop
-  } // zero flux for 1D
+        }
+        if (use_wedge) {
+          kappa_wedge = 0.5*(kappa(DiffProcess::kappa_wedge,k,j,i)
+                        + kappa(DiffProcess::kappa_wedge,k,j-1,i));
+          wedge_flux = -(HII*kappa_wedge*denf*(bz*dTdx - bx*dTdz));
+        }
+        if(use_neutral || use_para || use_perp) {
+          x2flux(k,j,i) += iso_flux + para_flux + perp_flux;
+        }
+        if(use_wedge) {
+          x2flux_disp(k,j,i) += wedge_flux;
+          if(!STS_ENABLED) {
+            x2flux(k,j,i) += wedge_flux;
+          } // end if STS
+        } // end if wedge
+      } // i loop
+    } // j loop
+  } // k loop
+} // zero flux for 1D
 
   // k-direction
   il = is, iu = ie, jl = js, ju = je;
@@ -387,16 +393,19 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
                         + kappa(DiffProcess::kappa_wedge,k-1,j,i));
           wedge_flux = - (HII*kappa_wedge*denf*(bx*dTdy - by*dTdx));
         }
-        if(use_neutral || use_para || use_perp)
+        if(use_neutral || use_para || use_perp) {
           x3flux(k,j,i) += iso_flux + para_flux + perp_flux;
+        }
         if(use_wedge) {
           x3flux_disp(k,j,i) += wedge_flux;
-            if(!STS_ENABLED) x3flux(k,j,i) += wedge_flux;
-           } // end edge
-          } // i loop
-        } // j loop
-      } // k loop
-    } // zero flux for 1D/2D
+          if(!STS_ENABLED) {
+            x3flux(k,j,i) += wedge_flux;
+          } // end if STS
+        } // end if wedge
+      } // i loop
+    } // j loop
+  } // k loop
+} // zero flux for 1D/2D
   return;
 }
 

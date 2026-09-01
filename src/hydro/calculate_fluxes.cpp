@@ -371,8 +371,11 @@ void Hydro::CalculateFluxes(AthenaArray<Real> &w, FaceField &b,
     } // end if (order == 4)
   }
 
-  if (!STS_ENABLED) AddDiffusionFluxes();
-  else AddDiffusionFluxes_Disp();
+  if (!STS_ENABLED) {
+    AddDiffusionFluxes();
+  } else {
+    AddDiffusionFluxes_Disp();
+  }
   return;
 }
 

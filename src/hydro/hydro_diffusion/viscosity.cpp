@@ -637,18 +637,20 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
           }
         }
         if (NON_BAROTROPIC_EOS) {
-          if(use_neutral || use_para || use_perp1 || use_perp2)
+          if(use_neutral || use_para || use_perp1 || use_perp2) {
             x1flux(IEN,k,j,i) += 0.5*((p(IM1,k,j,i-1) + p(IM1,k,j,i))*Pi_xx +
                                       (p(IM2,k,j,i-1) + p(IM2,k,j,i))*Pi_xy +
                                       (p(IM3,k,j,i-1) + p(IM3,k,j,i))*Pi_xz);
+          }
           if (use_wedge1 || use_wedge2) {
             x1flux_disp(IEN,k,j,i) += 0.5*((p(IM1,k,j,i-1) + p(IM1,k,j,i))*Pi_xx_disp +
                                           (p(IM2,k,j,i-1) + p(IM2,k,j,i))*Pi_xy_disp +
                                           (p(IM3,k,j,i-1) + p(IM3,k,j,i))*Pi_xz_disp);
-            if(!STS_ENABLED)
+            if(!STS_ENABLED) {
               x1flux(IEN,k,j,i) += 0.5*((p(IM1,k,j,i-1) + p(IM1,k,j,i))*Pi_xx_disp +
                                         (p(IM2,k,j,i-1) + p(IM2,k,j,i))*Pi_xy_disp +
                                         (p(IM3,k,j,i-1) + p(IM3,k,j,i))*Pi_xz_disp);
+            } // end if STS
           } // end if wedge
         } // end if NON_BAROTROPIC_EOS
       } // i loop
@@ -917,37 +919,38 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
           x2flux(IM1,k,j,i) += Pi_yx;
           x2flux(IM2,k,j,i) += Pi_yy;
           x2flux(IM3,k,j,i) += Pi_yz;
-
         }
         if (use_wedge1 || use_wedge2) {
           x2flux_disp(IM1,k,j,i) += Pi_yx_disp;
           x2flux_disp(IM2,k,j,i) += Pi_yy_disp;
           x2flux_disp(IM3,k,j,i) += Pi_yz_disp;
-          if(!STS_ENABLED){
+          if(!STS_ENABLED) {
             x2flux(IM1,k,j,i) += Pi_yx_disp;
             x2flux(IM2,k,j,i) += Pi_yy_disp;
             x2flux(IM3,k,j,i) += Pi_yz_disp;
           }
         }
         if (NON_BAROTROPIC_EOS) {
-          if (use_neutral || use_para || use_perp1 || use_perp2)
+          if (use_neutral || use_para || use_perp1 || use_perp2) {
             x2flux(IEN,k,j,i) += 0.5*((p(IM1,k,j-1,i) + p(IM1,k,j,i))*Pi_yx +
                                       (p(IM2,k,j-1,i) + p(IM2,k,j,i))*Pi_yy +
                                       (p(IM3,k,j-1,i) + p(IM3,k,j,i))*Pi_yz);
+          }
           if(use_wedge1 || use_wedge2) {
           x2flux_disp(IEN,k,j,i) += 0.5*((p(IM1,k,j-1,i) + p(IM1,k,j,i))*Pi_yx_disp +
                                          (p(IM2,k,j-1,i) + p(IM2,k,j,i))*Pi_yy_disp +
                                          (p(IM3,k,j-1,i) + p(IM3,k,j,i))*Pi_yz_disp);
-          if(!STS_ENABLED)
-            x2flux(IEN,k,j,i) += 0.5*((p(IM1,k,j-1,i) + p(IM1,k,j,i))*Pi_yx_disp +
-                                      (p(IM2,k,j-1,i) + p(IM2,k,j,i))*Pi_yy_disp +
-                                      (p(IM3,k,j-1,i) + p(IM3,k,j,i))*Pi_yz_disp);
-           } // end if wedge
-          } // end if NON_BAROTROPIC_EOS
-        } // i loop
-      } // j loop
-    } // k loop
-  }  // end if
+            if(!STS_ENABLED) {
+              x2flux(IEN,k,j,i) += 0.5*((p(IM1,k,j-1,i) + p(IM1,k,j,i))*Pi_yx_disp +
+                                        (p(IM2,k,j-1,i) + p(IM2,k,j,i))*Pi_yy_disp +
+                                        (p(IM3,k,j-1,i) + p(IM3,k,j,i))*Pi_yz_disp);
+            } // end if STS
+          } // end if wedge
+        } // end if NON_BAROTROPIC_EOS
+      } // i loop
+    } // j loop
+  } // k loop
+}  // end if
   il = is, iu = ie, jl = js, ju = je;
   if (MAGNETIC_FIELDS_ENABLED) {
     if (f2) // 2D or 3D MHD limits
@@ -1236,10 +1239,11 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
               x3flux_disp(IEN,k,j,i) += 0.5*((p(IM1,k-1,j,i) + p(IM1,k,j,i))*Pi_zx_disp +
                                              (p(IM2,k-1,j,i) + p(IM2,k,j,i))*Pi_zy_disp +
                                              (p(IM3,k-1,j,i) + p(IM3,k,j,i))*Pi_zz_disp);
-              if (!STS_ENABLED)
+              if (!STS_ENABLED) {
                 x3flux(IEN,k,j,i) += 0.5*((p(IM1,k-1,j,i) + p(IM1,k,j,i))*Pi_zx_disp +
                                           (p(IM2,k-1,j,i) + p(IM2,k,j,i))*Pi_zy_disp +
                                           (p(IM3,k-1,j,i) + p(IM3,k,j,i))*Pi_zz_disp);
+              } // end if STS
             } // end if wedge
           } // end if NON_BAROTROPIC_EOS
         } // i loop

@@ -302,8 +302,10 @@ void Coordinates::AddCoordTermsDivergence(
 
   HydroDiffusion &hd = pmy_block->phydro->hdif;
   bool do_hydro_diffusion = (hd.hydro_diffusion_defined &&
-                            (hd.nu_iso > 0.0 || hd.nu_aniso_neutral > 0.0 || hd.nu_aniso_para > 0.0 || hd.nu_aniso_perp1 > 0.0 ||
-                             hd.nu_aniso_perp2 > 0.0 || hd.nu_aniso_wedge1 > 0.0 || hd.nu_aniso_wedge2 || 0.0));
+                            (hd.nu_iso > 0.0 || hd.nu_aniso_neutral > 0.0 ||
+                             hd.nu_aniso_para > 0.0 || hd.nu_aniso_perp1 > 0.0 ||
+                             hd.nu_aniso_perp2 > 0.0 || hd.nu_aniso_wedge1 > 0.0 ||
+                             hd.nu_aniso_wedge2 > 0.0));
 
   for (int k=pmy_block->ks; k<=pmy_block->ke; ++k) {
     for (int j=pmy_block->js; j<=pmy_block->je; ++j) {
@@ -347,8 +349,10 @@ void Coordinates::AddCoordTermsDivergence_STS(
 
   HydroDiffusion &hd = pmy_block->phydro->hdif;
   bool do_hydro_diffusion = (hd.hydro_diffusion_defined &&
-                            (hd.nu_iso > 0.0 || hd.nu_aniso_neutral > 0.0 || hd.nu_aniso_para > 0.0 || hd.nu_aniso_perp1 > 0.0 ||
-                             hd.nu_aniso_perp2 > 0.0 || hd.nu_aniso_wedge1 > 0.0 || hd.nu_aniso_wedge2 || 0.0));
+                            (hd.nu_iso > 0.0 || hd.nu_aniso_neutral > 0.0 ||
+                             hd.nu_aniso_para > 0.0 || hd.nu_aniso_perp1 > 0.0 ||
+                             hd.nu_aniso_perp2 > 0.0 || hd.nu_aniso_wedge1 > 0.0 ||
+                             hd.nu_aniso_wedge2 > 0.0));
 
   if (do_hydro_diffusion) {
     for (int k=pmy_block->ks; k<=pmy_block->ke; ++k) {

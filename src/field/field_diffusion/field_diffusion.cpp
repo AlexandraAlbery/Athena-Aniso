@@ -242,7 +242,7 @@ void FieldDiffusion::CalcDiffusionEMF(FaceField &bi, const AthenaArray<Real> &bc
           ph->hdif.ClearFlux(teflx); ph->hdif.ClearFlux(teflx_disp);
           ThermoElectricConduction(pmy_block, bi, bc, teflx, teflx_disp);
           ThermoElectricForce(pmy_block, bi, bc, e_oa, e_h);}
-   }
+    }
     // calculate the Poynting flux pflux and add to energy flux in Hydro class
     if (field_oa_defined) PoyntingFlux(e_oa, bc, pflux);
     if (field_disp_defined) PoyntingFlux(e_h, bc, pflux_disp);
@@ -464,15 +464,15 @@ void FieldDiffusion::NewDiffusionDt(Real &dt_oa, Real &dt_h, Real &dt_OAH,
         len(i) = (f2) ? std::min(len(i), dx2(i)):len(i);
         len(i) = (f3) ? std::min(len(i), dx3(i)):len(i);
       }
-      if(STS_ENABLED){ // split ohmic+ambi (parabolic) and Hall (hyperbolic) CFLs
+      if(STS_ENABLED) { // split ohmic+ambi (parabolic) and Hall (hyperbolic) CFLs
         if ((eta_ohm > 0.0) || (eta_ad > 0.0)) {
-          for (int i=is; i<=ie; ++i){
+          for (int i=is; i<=ie; ++i) {
             dt_oa = std::min(dt_oa, static_cast<Real>(
                 fac_oa*SQR(len(i)) / (eta_t(i) + TINY_NUMBER)));
             } // i loop
         } // end ohmic+ambi dt
         if (eta_hall > 0.0) {
-          for (int i=is; i<=ie; ++i){ // dt_h is one minima of dt_TE
+          for (int i=is; i<=ie; ++i) { // dt_h is one minima of dt_TE
             inv_dt_TE_hyp(k,j,i) = 1.0 / static_cast<Real>(fac_h*SQR(len(i)) /
                                                   (std::abs(etaB(DiffProcess::hall,k,j,i))
                                                   + TINY_NUMBER));
@@ -506,8 +506,8 @@ void FieldDiffusion::NewDiffusionDt(Real &dt_oa, Real &dt_h, Real &dt_OAH,
                                   && (hdif_.kappa_aniso_neutral > 0.0);
           HII = have_ion_frac ? hdif_.ion_frac(k,j,i) : 1.0;
           // Parabolic TE: thermal + ohmic + ambi + Nerst/Ettinghausen
-          if(use_TE_wedge && STS_ENABLED  && hdif_.conduction_on && (eta_ohm > 0.0
-                                                                    || eta_ad > 0.0)){
+          if(use_TE_wedge && STS_ENABLED  && hdif_.conduction_on && (eta_ohm > 0.0 ||
+                                                                     eta_ad > 0.0)) {
             if(hdif_.kappa_iso > 0.0)
               kappa0 = hdif_.kappa(HydroDiffusion::DiffProcess::iso,k,j,i);
             if(hdif_.aniso_conduction) {
@@ -519,7 +519,7 @@ void FieldDiffusion::NewDiffusionDt(Real &dt_oa, Real &dt_h, Real &dt_OAH,
             }
             Real kappa_Jw = HII*(kappa_J_wedge);
             lam_TE_para = TEParaEigenMax(gm1, kappa0, d_kappa, eta_t(i),
-                                              kappa_Jw, e_int);
+                                         kappa_Jw, e_int);
             dt_TE_para = std::min(dt_TE_para, static_cast<Real>
                                   (fac_oa*SQR(len(i))/(lam_TE_para + TINY_NUMBER)));
           }
@@ -549,7 +549,6 @@ void FieldDiffusion::NewDiffusionDt(Real &dt_oa, Real &dt_h, Real &dt_OAH,
 //! \brief Unsplit/isolated thermoelectric CFL. FT_w is ill-posed without therm+mag diff
 Real FieldDiffusion::TEEigenMax(const Real kJpara, const Real kJperp, const Real kJwedge,
                                 const Real HII, const Real E_int) {
-
   Real dk = HII*std::abs(kJpara - kJperp);
   Real kw = HII*kJwedge;
   Real lam1 = std::abs(kw)/std::sqrt(E_int);
@@ -558,12 +557,12 @@ Real FieldDiffusion::TEEigenMax(const Real kJpara, const Real kJperp, const Real
   Real u_star = 0.0;
   if(dk != 0) {
     u_star = (dk*dk + kw*kw)/(2.0*dk*dk);
-    if(u_star >= 0.0 && u_star <= 1.0){
+    if(u_star >= 0.0 && u_star <= 1.0) {
       lam2 = std::sqrt((dk*dk - kw*kw)*(dk*dk - kw*kw)/(4.0*E_int*dk*dk));
     }
   }
   Real lam3 = 0.0;
-  if(kw == 0.0 || u_star < 0.0 || u_star > 1.0){
+  if(kw == 0.0 || u_star < 0.0 || u_star > 1.0) {
     lam3 = 0.5*dk/std::sqrt(E_int);
   }
 
@@ -578,7 +577,6 @@ Real FieldDiffusion::TEEigenMax(const Real kJpara, const Real kJperp, const Real
 Real FieldDiffusion::TEParaEigenMax(const Real gm1, const Real kappa_0,
                                     const Real d_kappa, const Real eta_oa,
                                     const Real kappa_Jw, const Real E_int) {
-
   Real lam0 = 0.5*(gm1*kappa_0 + eta_oa + std::sqrt(SQR(gm1*kappa_0 - eta_oa)
                    + 4.0*SQR(kappa_Jw)/E_int));
   Real lam1 = std::max(gm1*(kappa_0 + d_kappa), eta_oa);
@@ -590,7 +588,6 @@ Real FieldDiffusion::TEParaEigenMax(const Real gm1, const Real kappa_0,
 //! \brief Max |eigenvalue| of the HYPERBOLIC Hall + Peltier/Seebeck system.
 Real FieldDiffusion::TEHypEigenMax(const Real etaH, const Real HII, const Real kJpara,
                                    const Real kJperp, const Real E_int) {
-
   const Real dk = HII*std::abs(kJpara - kJperp);
   Real lam = 0.0;
   if (dk == 0.0) {

@@ -136,7 +136,7 @@ HydroDiffusion::HydroDiffusion(Hydro *phyd, ParameterInput *pin) :
       cndflx[X1DIR].NewAthenaArray(nc3, nc2, nc1+1);
       cndflx[X2DIR].NewAthenaArray(nc3, nc2+1, nc1);
       cndflx[X3DIR].NewAthenaArray(nc3+1, nc2, nc1);
-      if(kappa_aniso_wedge > 0.0){
+      if(kappa_aniso_wedge > 0.0) {
         cndflx_disp[X1DIR].NewAthenaArray(nc3, nc2, nc1+1);
         cndflx_disp[X2DIR].NewAthenaArray(nc3, nc2+1, nc1);
         cndflx_disp[X3DIR].NewAthenaArray(nc3+1, nc2, nc1);
@@ -171,7 +171,6 @@ HydroDiffusion::HydroDiffusion(Hydro *phyd, ParameterInput *pin) :
     inv_dt_cnd_disp.NewAthenaArray(nc3,nc2,nc1);
     inv_dt_visc.NewAthenaArray(nc3,nc2,nc1);
     inv_dt_vis_disp.NewAthenaArray(nc3,nc2,nc1);
-
   }
 
   if ((kappa_aniso_wedge > 0.0 || nu_aniso_wedge1 > 0.0 || nu_aniso_wedge2 > 0.0)

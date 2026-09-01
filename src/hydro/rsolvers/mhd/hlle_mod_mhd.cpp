@@ -58,7 +58,6 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
 
 #pragma omp simd private(wli,wri,wroe,fl,fr,flxi)
   for (int i=il; i<=iu; ++i) {
-
     int kl = k-ok; int jl = j-oj; int il = i-oi;
     //--- Step 1. Load L/R states into local variables
 
@@ -126,9 +125,16 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
                                    -fdif_.thermKappa(fdif_.kappa_TE_perp,k,j,i))
                                    *HIIr : 0.0;
     Real dxl = 0; Real dxr = 0;
-    if (ivx == IVX)      { dxl = pco->dx1f(i-1); dxr = pco->dx1f(i); }
-    else if (ivx == IVY) { dxl = pco->dx2f(j-1); dxr = pco->dx2f(j); }
-    else                 { dxl = pco->dx3f(k-1); dxr = pco->dx3f(k); }
+    if (ivx == IVX) {
+      dxl = pco->dx1f(i-1);
+      dxr = pco->dx1f(i);
+    } else if (ivx == IVY) {
+      dxl = pco->dx2f(j-1);
+      dxr = pco->dx2f(j);
+    } else {
+      dxl = pco->dx3f(k-1);
+      dxr = pco->dx3f(k);
+    }
     Real dxf = 0.5*(dxl + dxr);
 
     //--- Step 3b. Gyro-viscous coefficeints
@@ -138,10 +144,17 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     Real nw2r = h_on ? hdif_.nu(hdif_.nu_wedge2,k,j,i)*HIIr : 0.0;
 
     //--- Step 3c. Thermal Hall (right-Leduc) coefficeints
-    Real dta, dtb;
-    if (ivx == IVX)      { dta = pco->dx2f(j); dtb = pco->dx3f(k); }
-    else if (ivx == IVY) { dta = pco->dx3f(k); dtb = pco->dx1f(i); }
-    else                 { dta = pco->dx1f(i); dtb = pco->dx2f(j); }
+    Real dta = 0.0; Real dtb = 0.0;
+    if (ivx == IVX) {
+      dta = pco->dx2f(j);
+      dtb = pco->dx3f(k);
+    } else if (ivx == IVY) {
+      dta = pco->dx3f(k);
+      dtb = pco->dx1f(i);
+    } else {
+      dta = pco->dx1f(i);
+      dtb = pco->dx2f(j);
+    }
     Real curlb = 2.0/dta + 2.0/dtb;
     Real kappawl = h_on ? hdif_.kappa(hdif_.kappa_wedge,kl,jl,il)
                                      *hdif_.ion_frac(kl,jl,il) : 0.0;
@@ -208,7 +221,7 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     // Peltier Seebeck wave (Internal energy)
     Real Dl = 0;
     Real Dr = 0;
-    if(NON_BAROTROPIC_EOS){
+    if(NON_BAROTROPIC_EOS) {
     Dl = dkappaJl*dkappaJl/((wli[IPR]/gm1)*dxl*dxl);
     Dr = dkappaJr*dkappaJr/((wri[IPR]/gm1)*dxr*dxr);
     }
@@ -293,7 +306,7 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     Real fl_int = 0.0; Real fr_int = 0.0; Real fl_kin = 0.0; Real fr_kin = 0.0;
     Real fl_mag = 0.0; Real fr_mag = 0.0;
 
-    if(NON_BAROTROPIC_EOS){
+    if(NON_BAROTROPIC_EOS) {
       ekl = 0.5*wli[IDN]*(SQR(wli[IVX])+SQR(wli[IVY])+SQR(wli[IVZ]));
       ekr = 0.5*wri[IDN]*(SQR(wri[IVX])+SQR(wri[IVY])+SQR(wri[IVZ]));
 
