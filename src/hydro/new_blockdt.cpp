@@ -227,29 +227,28 @@ void Hydro::NewBlockTimeStep() {
     // Parabolic: therm, visc, oa+ft_w
     min_dt_parabolic = std::min({min_dt_parabolic, min_dt_vis, min_dt_cnd,
                                  min_dt_oa, min_dt_TE_para});
-    // Hyperbolic: ideal + right-ledeuc + hall/peltier/seebeck, gyro-visc
+    // Hyperbolic: ideal + right-ledeuc + hall/peltier/seebeck + gyro-visc
     if (disp_active) {
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
             Real inv = 0.0;
             if (fd_on) inv = fdif_.inv_dt_TE_hyp(k,j,i);
-            if (hd_on) inv = std::max(inv, hdif.inv_dt_vis_disp(k,j,i));
-            Real inv_disp = inv;
-            if (hd_on) inv_disp += hdif.inv_dt_cnd_disp(k,j,i);
-            if (inv_disp > 0.0)
+            if (hd_on) inv = std::max(inv, hdif.inv_dt_vis_disp(k,j,i))
+                             + hdif.inv_dt_cnd_disp(k,j,i);
+            if (inv > 0.0)
               min_dt_hyperbolic = std::min<Real>(min_dt_hyperbolic,
-                                           1.0/(inv_dt_ideal(k,j,i) + inv_disp));
+                                                 1.0/(inv_dt_ideal(k,j,i) + inv));
           }
         }
       }
     }
   } else {
-    // unsplit: ideal kept separate; diffusion inverse-summed per cell
+    // unsplit: ideal+ diffusion + dispersion
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
-          Real inv_tot = 0.0;
+          Real inv_tot = inv_dt_ideal(k,j,i);
           if (hd_on) inv_tot += hdif.inv_dt_cnd(k,j,i) + hdif.inv_dt_visc(k,j,i);
           if (fd_on) {
             inv_tot += fdif_.inv_dt_OAH(k,j,i);
