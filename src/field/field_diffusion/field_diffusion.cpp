@@ -589,6 +589,7 @@ Real FieldDiffusion::TEParaEigenMax(const Real gm1, const Real kappa_0,
 Real FieldDiffusion::TEHypEigenMax(const Real etaH, const Real HII, const Real kJpara,
                                    const Real kJperp, const Real E_int) {
   const Real dk = HII*std::abs(kJpara - kJperp);
+  Real root_E = std::sqrt(E_int);
   Real lam = 0.0;
   if (dk == 0.0) {
     lam = std::abs(etaH);
@@ -599,6 +600,6 @@ Real FieldDiffusion::TEHypEigenMax(const Real etaH, const Real HII, const Real k
     lam = std::abs(etaH);
     return lam;
   }
-  lam = std::sqrt(0.5*SQR(etaH) + 0.25*(SQR(dk)/E_int + SQR(SQR(etaH))*E_int/SQR(dk)));
+  lam = 0.5*(SQR(etaH)*root_E/dk + dk/root_E);
   return lam;
 }
