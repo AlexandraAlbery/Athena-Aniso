@@ -529,7 +529,7 @@ void FieldDiffusion::NewDiffusionDt(Real &dt_oa, Real &dt_h, Real &dt_OAH,
             Real etaH = (eta_hall > 0.0) ? std::abs(etaB(DiffProcess::hall,k,j,i)) : 0.0;
             lam_TE_hyp = TEHypEigenMax(etaH, HII, kappa_J_para, kappa_J_perp, e_int);
             inv_dt_TE_hyp(k,j,i) =  1.0/(static_cast<Real>(fac_h*SQR(len(i))/
-                                        (lam_TE_hyp+ TINY_NUMBER)));
+                                        (lam_TE_hyp + TINY_NUMBER)));
             }
 
           // Thermoelectric CFL unsplit

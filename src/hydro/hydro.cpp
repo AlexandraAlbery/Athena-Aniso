@@ -101,6 +101,7 @@ Hydro::Hydro(MeshBlock *pmb, ParameterInput *pin) :
   dt1_.NewAthenaArray(nc1);
   dt2_.NewAthenaArray(nc1);
   dt3_.NewAthenaArray(nc1);
+  inv_dt_ideal.NewAthenaArray(nc3, nc2, nc1);
   dxw_.NewAthenaArray(nc1);
   wl_.NewAthenaArray(NWAVE, nc1);
   wr_.NewAthenaArray(NWAVE, nc1);

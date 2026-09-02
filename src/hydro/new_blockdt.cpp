@@ -65,8 +65,6 @@ void Hydro::NewBlockTimeStep() {
   Real min_dt_parabolic  = real_max;
   Real min_dt_user  = real_max;
 
-  // uses for 1/dt_ideal + 1/dt_dispersive when STS is enabled
-  AthenaArray<Real> inv_dt_ideal(nc3, nc2, nc1);
   inv_dt_ideal.ZeroClear();
 
   Real cspeed = 0.0;
@@ -232,13 +230,17 @@ void Hydro::NewBlockTimeStep() {
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
-            Real inv = 0.0;
-            if (fd_on) inv = fdif_.inv_dt_TE_hyp(k,j,i);
-            if (hd_on) inv = std::max(inv, hdif.inv_dt_vis_disp(k,j,i))
-                             + hdif.inv_dt_cnd_disp(k,j,i);
+            Real inv = inv_dt_ideal(k,j,i);
+            Real inv_TE = 0.0;
+            Real inv_vis = 0.0;
+            if (hd_on) {
+              inv_TE +=  hdif.inv_dt_cnd_disp(k,j,i);
+              inv_vis = hdif.inv_dt_vis_disp(k,j,i);
+            }
+            if (fd_on) inv_TE = fdif_.inv_dt_TE_hyp(k,j,i);
+            inv += std::max<Real>(inv_vis, inv_TE);
             if (inv > 0.0)
-              min_dt_hyperbolic = std::min<Real>(min_dt_hyperbolic,
-                                                 1.0/(inv_dt_ideal(k,j,i) + inv));
+              min_dt_hyperbolic = std::min<Real>(min_dt_hyperbolic, 1.0/inv);
           }
         }
       }
@@ -249,11 +251,17 @@ void Hydro::NewBlockTimeStep() {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
           Real inv_tot = inv_dt_ideal(k,j,i);
-          if (hd_on) inv_tot += hdif.inv_dt_cnd(k,j,i) + hdif.inv_dt_visc(k,j,i);
-          if (fd_on) {
-            inv_tot += fdif_.inv_dt_OAH(k,j,i);
-            if (te_active) inv_tot += fdif_.inv_dt_TE(k,j,i);
+          Real inv_vis_tot = 0.0;
+          Real inv_TE_tot = 0.0;
+          if (hd_on) {
+            inv_TE_tot += hdif.inv_dt_cnd(k,j,i);
+            inv_vis_tot = hdif.inv_dt_visc(k,j,i);
           }
+          if (fd_on) {
+            inv_TE_tot += fdif_.inv_dt_OAH(k,j,i);
+            if (te_active) inv_TE_tot += fdif_.inv_dt_TE(k,j,i);
+          }
+          inv_tot += std::max<Real>(inv_vis_tot, inv_TE_tot);
           if (inv_tot > 0.0)
             min_dt_hyperbolic = std::min<Real>(min_dt_hyperbolic, 1.0/inv_tot);
         }

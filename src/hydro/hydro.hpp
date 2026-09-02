@@ -62,6 +62,8 @@ class Hydro {
   HydroSourceTerms hsrc;
   HydroDiffusion hdif;
 
+  AthenaArray<Real> inv_dt_ideal; // used for dt = 1/(1/dt_ideal + 1/dt_non-ideal)
+
   // functions
   void NewBlockTimeStep();    // computes new timestep on a MeshBlock
   void AddFluxDivergence(const Real wght, AthenaArray<Real> &u_out);
