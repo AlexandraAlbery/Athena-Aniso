@@ -422,7 +422,10 @@ void FieldDiffusion::NewDiffusionDt(Real &dt_oa, Real &dt_h, Real &dt_OAH,
   Real gamma = pmb->peos->GetGamma();
   Real gm1   = gamma - 1.0;
   Real HII = 0;
-  Real kappa_J_para = 0; Real kappa_J_perp = 0; Real kappa_J_wedge = 0;
+  Real kappa_J_para = 0;
+  Real kappa_J_perp = 0;
+  Real kappa_J_wedge = 0;
+  Real kappa_Jw = 0.0;
   Real e_int = 0;
   Real lam_TE = 0; // unsplit/isolated TE coefficeint
   Real lam_TE_para = 0; // therm+ohmic+ambi+FT_w TE coefficeint
@@ -498,9 +501,12 @@ void FieldDiffusion::NewDiffusionDt(Real &dt_oa, Real &dt_h, Real &dt_OAH,
       if(use_TE_para || use_TE_perp || use_TE_wedge) {
         for (int i=is; i<=ie; ++i) {
           e_int = pmb->phydro->w(IPR,k,j,i)/(gm1);
-          kappa_J_para = thermKappa(ThermElecProcess::kappa_TE_para,k,j,i);
-          kappa_J_perp  = thermKappa(ThermElecProcess::kappa_TE_perp,k,j,i);
-          kappa_J_wedge = thermKappa(ThermElecProcess::kappa_TE_wedge,k,j,i);
+          kappa_J_para  = use_TE_para
+                        ? thermKappa(ThermElecProcess::kappa_TE_para,k,j,i)  : 0.0;
+          kappa_J_perp  = use_TE_perp
+                        ? thermKappa(ThermElecProcess::kappa_TE_perp,k,j,i)  : 0.0;
+          kappa_J_wedge = use_TE_wedge
+                        ? thermKappa(ThermElecProcess::kappa_TE_wedge,k,j,i) : 0.0;
           bool have_ion_frac = hdif_.hydro_diffusion_defined
                                   && hdif_.aniso_conduction
                                   && (hdif_.kappa_aniso_neutral > 0.0);
@@ -511,13 +517,16 @@ void FieldDiffusion::NewDiffusionDt(Real &dt_oa, Real &dt_h, Real &dt_OAH,
             if(hdif_.kappa_iso > 0.0)
               kappa0 = hdif_.kappa(HydroDiffusion::DiffProcess::iso,k,j,i);
             if(hdif_.aniso_conduction) {
-              kappa_n = hdif_.kappa(HydroDiffusion::DiffProcess::kappa_neutral,k,j,i);
-              kappa_para = hdif_.kappa(HydroDiffusion::DiffProcess::kappa_para,k,j,i);
-              kappa_perp =  hdif_.kappa(HydroDiffusion::DiffProcess::kappa_perp,k,j,i);
+              kappa_n    = (hdif_.kappa_aniso_neutral > 0.0) ?
+              hdif_.kappa(HydroDiffusion::DiffProcess::kappa_neutral,k,j,i) : 0.0;
+              kappa_para = (hdif_.kappa_aniso_para > 0.0) ?
+              hdif_.kappa(HydroDiffusion::DiffProcess::kappa_para,k,j,i) : 0.0;
+              kappa_perp = (hdif_.kappa_aniso_perp > 0.0) ?
+              hdif_.kappa(HydroDiffusion::DiffProcess::kappa_perp,k,j,i) : 0.0;
               kappa0 = (1.0-HII)*kappa_n + HII*kappa_perp;
               d_kappa = HII*(kappa_para - kappa_perp);
             }
-            Real kappa_Jw = HII*(kappa_J_wedge);
+            kappa_Jw = HII*(kappa_J_wedge);
             lam_TE_para = TEParaEigenMax(gm1, kappa0, d_kappa, eta_t(i),
                                          kappa_Jw, e_int);
             dt_TE_para = std::min(dt_TE_para, static_cast<Real>

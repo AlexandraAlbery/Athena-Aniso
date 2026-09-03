@@ -414,9 +414,13 @@ void HydroDiffusion::NewDiffusionDt(Real &dt_vis, Real &dt_cnd, Real &dt_vis_dis
           kappa_t_disp(i) = 0.0;
           if (aniso_conduction) {
             HII_cnd = (kappa_aniso_neutral == 0.0 ? 1.0 : ion_frac(k,j,i));
-            kappa_t(i) += (1.0-HII_cnd)*kappa(DiffProcess::kappa_neutral,k,j,i)
-                       + HII_cnd*std::max(kappa(DiffProcess::kappa_para,k,j,i),
-                                          kappa(DiffProcess::kappa_perp,k,j,i));
+            Real k_neu  = (kappa_aniso_neutral > 0.0)
+                        ? kappa(DiffProcess::kappa_neutral,k,j,i) : 0.0;
+            Real k_para = (kappa_aniso_para > 0.0)
+                        ? kappa(DiffProcess::kappa_para,k,j,i) : 0.0;
+            Real k_perp = (kappa_aniso_perp > 0.0)
+                        ? kappa(DiffProcess::kappa_perp,k,j,i) : 0.0;
+            kappa_t(i) += (1.0-HII_cnd)*k_neu + HII_cnd*std::max(k_para, k_perp);
             if (kappa_aniso_wedge > 0.0) {
               kappa_t_disp(i) = HII_cnd*kappa(DiffProcess::kappa_wedge,k,j,i);
               kappa_t_disp(i) *= gm1;
@@ -439,18 +443,20 @@ void HydroDiffusion::NewDiffusionDt(Real &dt_vis, Real &dt_cnd, Real &dt_vis_dis
         }
 
         if (viscosity_on) {
-          zr = (zeta_bulk > 0.0)
-                ? nu(DiffProcess::zeta,k,j,i)/pmb_->phydro->w(IDN,k,j,i) : 0.0;
+          zr = (zeta_bulk > 0.0) ?
+               nu(DiffProcess::zeta,k,j,i)/pmb_->phydro->w(IDN,k,j,i) : 0.0;
         nu_max = (nu_iso > 0.0) ? FOUR_THIRDS*nu(DiffProcess::iso,k,j,i) : 0.0;
         if (aniso_viscosity) {
           HII = (nu_aniso_neutral == 0.0) ? 1.0 : ion_frac(k,j,i);
-          nu_max += ViscAnisoEigenMax(HII, nu(DiffProcess::nu_neutral,k,j,i),
-                                    nu(DiffProcess::nu_para,k,j,i),
-                                    nu(DiffProcess::nu_perp1,k,j,i),
-                                    nu(DiffProcess::nu_perp2,k,j,i), zr);
+          Real n_neu  = (nu_aniso_neutral > 0.0) ? nu(DiffProcess::nu_neutral,k,j,i):0.0;
+          Real n_para = (nu_aniso_para    > 0.0) ? nu(DiffProcess::nu_para,k,j,i)   :0.0;
+          Real n_p1   = (nu_aniso_perp1   > 0.0) ? nu(DiffProcess::nu_perp1,k,j,i)  :0.0;
+          Real n_p2   = (nu_aniso_perp2   > 0.0) ? nu(DiffProcess::nu_perp2,k,j,i)  :0.0;
+          nu_max += ViscAnisoEigenMax(HII, n_neu, n_para, n_p1, n_p2, zr);
           if (nu_aniso_wedge1 > 0.0 || nu_aniso_wedge2 > 0.0) {
-            nu_t_disp(i) = GyroViscEigenMax(HII, nu(DiffProcess::nu_wedge1,k,j,i),
-                                                  nu(DiffProcess::nu_wedge2,k,j,i));
+            Real n_w1 = (nu_aniso_wedge1 > 0.0) ? nu(DiffProcess::nu_wedge1,k,j,i) : 0.0;
+            Real n_w2 = (nu_aniso_wedge2 > 0.0) ? nu(DiffProcess::nu_wedge2,k,j,i) : 0.0;
+            nu_t_disp(i) = GyroViscEigenMax(HII, n_w1, n_w1);
             inv_dt_vis_disp(k,j,i) += 1.0 / (static_cast<Real>(
                                       SQR(len)*fac_gyro/(nu_t_disp(i) + TINY_NUMBER)));
             inv_dt_visc(k,j,i) += inv_dt_vis_disp(k,j,i);

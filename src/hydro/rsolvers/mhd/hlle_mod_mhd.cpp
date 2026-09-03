@@ -52,7 +52,8 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
   Coordinates *pco = pmy_block->pcoord;
 
   const bool f_on = fdif_.field_diffusion_defined;
-  const bool h_on = hdif_.hydro_diffusion_defined;
+  const bool v_on = hdif.aniso_viscosity;
+  const bool c_on = hdif.aniso_conduction;
   const bool i_on = hdif_.kappa_aniso_neutral > 0.0 || hdif_.nu_aniso_neutral > 0.0;
 
 
@@ -138,10 +139,10 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     Real dxf = 0.5*(dxl + dxr);
 
     //--- Step 3b. Gyro-viscous coefficeints
-    Real nw1l = h_on ? hdif_.nu(hdif_.nu_wedge1,kl,jl,il)*HIIl : 0.0;
-    Real nw1r = h_on ? hdif_.nu(hdif_.nu_wedge1,k,j,i)*HIIr : 0.0;
-    Real nw2l = h_on ? hdif_.nu(hdif_.nu_wedge2,kl,jl,il)*HIIl : 0.0;
-    Real nw2r = h_on ? hdif_.nu(hdif_.nu_wedge2,k,j,i)*HIIr : 0.0;
+    Real nw1l = v_on ? hdif_.nu(hdif_.nu_wedge1,kl,jl,il)*HIIl : 0.0;
+    Real nw1r = v_on ? hdif_.nu(hdif_.nu_wedge1,k,j,i)*HIIr : 0.0;
+    Real nw2l = v_on ? hdif_.nu(hdif_.nu_wedge2,kl,jl,il)*HIIl : 0.0;
+    Real nw2r = v_on ? hdif_.nu(hdif_.nu_wedge2,k,j,i)*HIIr : 0.0;
 
     //--- Step 3c. Thermal Hall (right-Leduc) coefficeints
     Real dta = 0.0; Real dtb = 0.0;
@@ -156,9 +157,9 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
       dtb = pco->dx2f(j);
     }
     Real curlb = 2.0/dta + 2.0/dtb;
-    Real kappawl = h_on ? hdif_.kappa(hdif_.kappa_wedge,kl,jl,il)
+    Real kappawl = c_on ? hdif_.kappa(hdif_.kappa_wedge,kl,jl,il)
                                      *hdif_.ion_frac(kl,jl,il) : 0.0;
-    Real kappawr = h_on ? hdif_.kappa(hdif_.kappa_wedge,k,j,i)
+    Real kappawr = c_on ? hdif_.kappa(hdif_.kappa_wedge,k,j,i)
                                      *hdif_.ion_frac(k,j,i) : 0.0;
 
     // Compute fast-magnetosonic speed using eq. B18 (adiabatic) or B39 (isothermal)

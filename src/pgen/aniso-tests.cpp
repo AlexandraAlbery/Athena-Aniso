@@ -70,7 +70,7 @@ const int out_dt_vis_tot   = 18; // total viscosity
 const int out_dt_oah       = 19; // ohmic + ambipolar + hall (no TE)
 const int out_dt_TE        = 20; // unsplit isolated TE (P/S + N/E)
 const int out_dt_TE_hyp    = 21; // Hall+P/S
-const int out_dt_total     = 23; // Actual timestep
+const int out_dt_total     = 22; // Actual timestep
 
 
 // Initialise functions
@@ -154,8 +154,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
     // Get problem ID
     problem_ID = pin->GetInteger("problem", "problem_ID");
 
-    // Comment these out to test case 0-4 with constant coeffs
-    // These are used to check timesteps for case 5
     //EnrollConductionCoefficient(CalculateThermalKappa);
     //EnrollViscosityCoefficient(CalculateViscousNu);
     //EnrollFieldDiffusivity(CalculateMagDiff);
@@ -165,7 +163,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
 
 void MeshBlock::InitUserMeshBlockData(ParameterInput *pin) {
 
-    AllocateUserOutputVariables(13);
+    AllocateUserOutputVariables(24);
     SetUserOutputVariableName(out_T,"Temperature");
     SetUserOutputVariableName(out_sound,"Sound speed");
     SetUserOutputVariableName(out_alfven,"Alfven speed");
@@ -174,11 +172,23 @@ void MeshBlock::InitUserMeshBlockData(ParameterInput *pin) {
     SetUserOutputVariableName(out_fastMag,"Fast magnetosonic speed");
     SetUserOutputVariableName(out_whist,"Whistler speed");
     SetUserOutputVariableName(out_ioncyc,"Ion cyclotron speed");
-    SetUserOutputVariableName(out_TEwave,"Peltier/Seebeck speed");
-    SetUserOutputVariableName(out_TEWwave,"Peltier/Seebeck + Hall speed");
+    SetUserOutputVariableName(out_TEwave,"Peltier+Seebeck speed");
+    SetUserOutputVariableName(out_TEWwave,"Peltier+Seebeck+Hall speed");
     SetUserOutputVariableName(out_GVwave,"Gyro-Viscous speed");
     SetUserOutputVariableName(out_RLspeed,"Righi-Leduc speed");
-    // SetUserOutputVariableName(out_entropyProd,"Thermoelectric entropy production");
+
+    SetUserOutputVariableName(out_dt_ideal,"Ideal dt");
+    SetUserOutputVariableName(out_dt_vis_para ,"Viscoisty dt");
+    SetUserOutputVariableName(out_dt_cnd_para,"Thermal dt");
+    SetUserOutputVariableName(out_dt_vis_hyp,"Gyro-Viscous dt");
+    SetUserOutputVariableName(out_dt_cnd_hyp,"Righi-Leduc dt");
+    SetUserOutputVariableName(out_dt_cnd_tot,"Thermal+RL dt");
+    SetUserOutputVariableName(out_dt_vis_tot,"visc+GV dt");
+    SetUserOutputVariableName(out_dt_oah,"Magnetic dt ");
+    SetUserOutputVariableName(out_dt_TE ,"Isolated TE dt");
+    SetUserOutputVariableName(out_dt_TE_hyp,"Hall+Peltier+Seebeck dt");
+    SetUserOutputVariableName(out_dt_total ,"Actual dt");
+
     return;
 }
 
@@ -228,7 +238,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     {
         case 0:{
             Real T_0 = P_0/rho_0;
-            Real A_T = pin->GetOrAddReal("problem","gauss_amp_T", 1.0e-3);
+            Real A_T = pin->GetOrAddReal("problem","gauss_amp_T", 1.0e-1);
             Real L = xmax - xmin;
             Real sigma = 0.05 * L;
             Real inv2s2 = 1.0/(2.0*SQR(sigma));
@@ -561,6 +571,7 @@ void MeshBlock::UserWorkBeforeOutput(ParameterInput *pin) {
 
     GetTemperature(this);
     GetWaveSpeeds(this);
+    if(problem_ID==5) GetTimeSteps(this);
 
     return;
 }
@@ -945,7 +956,7 @@ void CalculateThermalKappa(HydroDiffusion *phdif, MeshBlock *pmb,
             k_perp = a0*std::pow(T,-1.0/2.0)*std::pow(B,-2.0);
             k_wedge = a0*T/B;
 
-            hdif.ion_frac(k,j,i) = HII;
+            if(have_ion_frac) hdif.ion_frac(k,j,i) = HII;
             hdif.kappa(hdif.kappa_neutral,k,j,i) = k_neu;
             hdif.kappa(hdif.kappa_para,k,j,i) = k_para;
             hdif.kappa(hdif.kappa_perp,k,j,i) = k_perp;
