@@ -147,6 +147,19 @@ void Hydro::NewBlockTimeStep() {
         }
       }
 
+      // Normalising by ndim here puts the ideal term on the same footing as the
+      // diffusion bounds, whose fac factors already carry 1/(2*ndim).
+      // cfl_number = 1 then means at the stability limit for every term
+      int ndim = 1;
+      if (pmb->block_size.nx2 > 1) ndim++;
+      if (pmb->block_size.nx3 > 1) ndim++;
+      if (ndim > 1) {
+        for (int i=is; i<=ie; ++i) {
+          dt1(i) /= ndim; dt2(i) /= ndim; dt3(i) /= ndim;
+          inv_dt_ideal(k,j,i) *= static_cast<Real>(ndim);
+        }
+      }
+
       // SR case: do nothing (assume maximum characteristic is c = 1)
       // GR case: divide cell widths by coordinate speed of light (not necessarily unity)
       if (GENERAL_RELATIVITY) {
