@@ -79,9 +79,17 @@ void GetWaveSpeeds(MeshBlock *pmb);
 //void GetEntropyProduction(MeshBlock *pmb);
 void CalculateThermalKappa(MeshBlock *pmb);
 void CalculateViscousNu(MeshBlock *pmb);
-void CalculateThermoElectricKappa(MeshBlock *pmb);
 void GetTimeSteps(MeshBlock *pmb);
 void GetBhat(MeshBlock *pmb, int k, int j, int i, Real &bx, Real &by, Real &bz);
+void CalculateThermalKappa(HydroDiffusion *phdif, MeshBlock *pmb,
+    const AthenaArray<Real> &prim,const AthenaArray<Real> &bcc,
+    int is, int ie, int js, int je,int ks, int ke);
+void CalculateViscousNu(HydroDiffusion *phdif, MeshBlock *pmb,
+    const AthenaArray<Real> &prim,const AthenaArray<Real> &bcc,
+    int is, int ie, int js, int je,int ks, int ke);
+void CalculateMagDiff(FieldDiffusion *pfdif, MeshBlock *pmb,
+    const AthenaArray<double> &w, const AthenaArray<double> &bmag,
+    int is, int ie, int js, int je, int ks, int ke);
 
 void Mesh::InitUserMeshData(ParameterInput *pin) {
 
@@ -145,6 +153,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
 
     // Get problem ID
     problem_ID = pin->GetInteger("problem", "problem_ID");
+
+    // Comment these out to test case 0-4 with constant coeffs
+    // These are used to check timesteps for case 5
+    EnrollConductionCoefficient(CalculateThermalKappa);
+    EnrollViscosityCoefficient(CalculateViscousNu);
+    EnrollFieldDiffusivity(CalculateMagDiff);
 
     return;
 }
@@ -218,6 +232,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
             Real L = xmax - xmin;
             Real sigma = 0.05 * L;
             Real inv2s2 = 1.0/(2.0*SQR(sigma));
+            Real B_energy = 0.5*(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
             Real x = 0; Real y = 0; Real z = 0; Real r2 = 0; Real T_local = 0;
 
             for (int k = ks; k <= ke; k++ ) {
@@ -227,11 +242,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                     for (int i = is; i <= ie; i++ ) {
                         x = this->pcoord->x1v(i);
                         r2 = SQR(x) + SQR(y) + SQR(z);
-                        // Gaussian temperature at uniform density
-                        T_local = T_0*(1.0 + A_T*std::exp(-r2*inv2s2));
-                        phydro->u(IDN,k,j,i) = rho_0;
-                        phydro->u(IEN,k,j,i) = rho_0*T_local/gm1 + 0.5*(SQR(Bx_0)
-                                                                 + SQR(By_0) + SQR(Bz_0));
+                        // Gaussian in ln T at uniform pressure:
+                        T_local = T_0*std::exp(A_T*std::exp(-r2*inv2s2));
+                        phydro->u(IDN,k,j,i) = P_0/T_local;        // pressure equilibrium
+                        phydro->u(IEN,k,j,i) = P_0/gm1 + B_energy; // uniform
                     } // i loop
                 } // j loop
             } // k loop
@@ -852,3 +866,172 @@ void GetBhat(MeshBlock *pmb, int k, int j, int i, Real &bx, Real &by, Real &bz) 
     return;
 }
 
+
+void CalculateThermalKappa(HydroDiffusion *phdif, MeshBlock *pmb,
+    const AthenaArray<Real> &prim,const AthenaArray<Real> &bcc,
+    int is, int ie, int js, int je,int ks, int ke) {
+
+    Real rho = 0.0; Real P = 0.0; Real T = 0.0;
+    Real Bx = 0.0; Real By = 0.0; Real Bz = 0.0;
+    Real B = 0.0; Real k_neu = 0.0; Real k_para =0.0;
+    Real k_perp = 0.0; Real k_wedge = 0.0; Real HII = 0.0;
+
+    HydroDiffusion &hdif = pmb->phydro->hdif;
+    FieldDiffusion &fdif = pmb->pfield->fdif;
+    bool have_ion_frac = hdif.hydro_diffusion_defined && hdif.aniso_conduction
+    && (hdif.kappa_aniso_neutral > 0.0);
+
+    int il = pmb->is - NGHOST; int iu = pmb->ie + NGHOST;
+    int jl = pmb->js - (pmb->pmy_mesh->f2 ? NGHOST : 0);
+    int ju = pmb->je + (pmb->pmy_mesh->f2 ? NGHOST : 0);
+    int kl = pmb->ks - (pmb->pmy_mesh->f3 ? NGHOST : 0);
+    int ku = pmb->ke + (pmb->pmy_mesh->f3 ? NGHOST : 0);
+
+    Real a0 = 1.0; // scale factor
+    Real T_ion = 1e3;
+
+    for (int k = kl; k <= ku; k++) {
+        for (int j = jl; j <= ju; j++) {
+          for (int i = il; i <= iu; i++) {
+
+            rho = pmb->phydro->w(IDN,k,j,i);
+            P = pmb->phydro->w(IPR,k,j,i);
+            T = P/rho;
+            Bx = pmb->pfield->bcc(IB1,k,j,i);
+            By = pmb->pfield->bcc(IB2,k,j,i);
+            Bz = pmb->pfield->bcc(IB3,k,j,i);
+            B = std::sqrt(Bx*Bx + By*By + Bz*Bz);
+
+            HII = (T/T_ion)/(1+(T/T_ion));
+            k_neu = a0*std::pow(T,1.0/2.0);
+            k_para = a0*std::pow(T,5.0/2.0);
+            k_perp = a0*std::pow(T,-1.0/2.0)*std::pow(B,-2.0);
+            k_wedge = a0*T/B;
+
+            hdif.ion_frac(k,j,i) = HII;
+            hdif.kappa(hdif.kappa_neutral,k,j,i) = k_neu;
+            hdif.kappa(hdif.kappa_para,k,j,i) = k_para;
+            hdif.kappa(hdif.kappa_perp,k,j,i) = k_perp;
+            hdif.kappa(hdif.kappa_wedge,k,j,i) = k_wedge;
+            }
+        }
+    }
+
+    return;
+}
+void CalculateViscousNu(HydroDiffusion *phdif, MeshBlock *pmb,
+    const AthenaArray<Real> &prim,const AthenaArray<Real> &bcc,
+    int is, int ie, int js, int je,int ks, int ke) {
+
+    Real rho = 0.0; Real P = 0.0; Real T = 0.0;
+    Real Bx = 0.0; Real By = 0.0; Real Bz = 0.0;
+    Real B = 0.0; Real n_neu = 0.0; Real n_para =0.0;
+    Real n_perp = 0.0; Real n_wedge = 0.0; Real HII = 0.0;
+
+    HydroDiffusion &hdif = pmb->phydro->hdif;
+    FieldDiffusion &fdif = pmb->pfield->fdif;
+    bool have_ion_frac = hdif.hydro_diffusion_defined && hdif.aniso_conduction
+    && (hdif.kappa_aniso_neutral > 0.0);
+
+    int il = pmb->is - NGHOST; int iu = pmb->ie + NGHOST;
+    int jl = pmb->js - (pmb->pmy_mesh->f2 ? NGHOST : 0);
+    int ju = pmb->je + (pmb->pmy_mesh->f2 ? NGHOST : 0);
+    int kl = pmb->ks - (pmb->pmy_mesh->f3 ? NGHOST : 0);
+    int ku = pmb->ke + (pmb->pmy_mesh->f3 ? NGHOST : 0);
+
+    Real a1 = 0.3; // scale factor
+    Real T_ion = 1e3;
+
+    for (int k = kl; k <= ku; k++) {
+        for (int j = jl; j <= ju; j++) {
+          for (int i = il; i <= iu; i++) {
+
+            rho = pmb->phydro->w(IDN,k,j,i);
+            P = pmb->phydro->w(IPR,k,j,i);
+            T = P/rho;
+            Bx = pmb->pfield->bcc(IB1,k,j,i);
+            By = pmb->pfield->bcc(IB2,k,j,i);
+            Bz = pmb->pfield->bcc(IB3,k,j,i);
+            B = std::sqrt(Bx*Bx + By*By + Bz*Bz);
+
+            HII = (T/T_ion)/(1+(T/T_ion));
+            n_neu = a1*std::pow(T,1.0/2.0);
+            n_para = a1*std::pow(T,5.0/2.0);
+            n_perp = a1*std::pow(T,-1.0/2.0)*std::pow(B,-2.0);
+            n_wedge = a1*T/B;
+
+            hdif.ion_frac(k,j,i) = HII;
+            hdif.nu(hdif.nu_neutral,k,j,i) = n_neu;
+            hdif.nu(hdif.nu_para,k,j,i) = n_para;
+            hdif.nu(hdif.nu_perp1,k,j,i) = n_perp;
+            hdif.nu(hdif.nu_perp2,k,j,i) = n_perp;
+            hdif.nu(hdif.nu_wedge1,k,j,i) = n_wedge;
+            hdif.nu(hdif.nu_wedge2,k,j,i) = n_wedge;
+            }
+        }
+    }
+
+    return;
+}
+void CalculateMagDiff(FieldDiffusion *pfdif, MeshBlock *pmb,
+    const AthenaArray<double> &w, const AthenaArray<double> &bmag,
+    int is, int ie, int js, int je, int ks, int ke) {
+
+    Real rho = 0.0; Real P = 0.0; Real T = 0.0;
+    Real Bx = 0.0; Real By = 0.0; Real Bz = 0.0;
+    Real B = 0.0; Real HII = 0.0;
+    Real kj_para =0.0; Real kj_perp = 0.0; Real kj_wedge = 0.0;
+    Real eta_o = 0.0; Real eta_ad = 0.0; Real eta_h = 0.0;
+
+    HydroDiffusion &hdif = pmb->phydro->hdif;
+    FieldDiffusion &fdif = pmb->pfield->fdif;
+    bool have_ion_frac = hdif.hydro_diffusion_defined && hdif.aniso_conduction
+    && (hdif.kappa_aniso_neutral > 0.0);
+
+    int il = pmb->is - NGHOST; int iu = pmb->ie + NGHOST;
+    int jl = pmb->js - (pmb->pmy_mesh->f2 ? NGHOST : 0);
+    int ju = pmb->je + (pmb->pmy_mesh->f2 ? NGHOST : 0);
+    int kl = pmb->ks - (pmb->pmy_mesh->f3 ? NGHOST : 0);
+    int ku = pmb->ke + (pmb->pmy_mesh->f3 ? NGHOST : 0);
+
+    Real a2 = 0.1; // scale factor
+    Real a3 = 0.2;
+    Real T_ion = 1e3;
+
+    for (int k = kl; k <= ku; k++) {
+        for (int j = jl; j <= ju; j++) {
+          for (int i = il; i <= iu; i++) {
+
+            rho = pmb->phydro->w(IDN,k,j,i);
+            P = pmb->phydro->w(IPR,k,j,i);
+            T = P/rho;
+            Bx = pmb->pfield->bcc(IB1,k,j,i);
+            By = pmb->pfield->bcc(IB2,k,j,i);
+            Bz = pmb->pfield->bcc(IB3,k,j,i);
+            B = std::sqrt(Bx*Bx + By*By + Bz*Bz);
+
+            eta_o = a2*std::pow(T,-3.0/2.0);
+            eta_ad = a2*std::pow(rho,-2.0);
+            eta_h = a2*B/rho;
+
+            eta_ad *= B*B; // athena uses eta_ad*B^2 for coeff
+
+            HII = (T/T_ion)/(1+(T/T_ion));
+            kj_para = a3*T;
+            kj_perp = a3*T*std::pow(B,-2.0);
+            kj_wedge = a3*T/B;
+
+            hdif.ion_frac(k,j,i) = HII;
+            fdif.etaB(fdif.ohmic,k,j,i) = eta_o;
+            fdif.etaB(fdif.ambipolar,k,j,i) = eta_ad;
+            fdif.etaB(fdif.hall,k,j,i) = eta_h;
+            fdif.thermKappa(fdif.kappa_TE_para,k,j,i) = kj_para;
+            fdif.thermKappa(fdif.kappa_TE_para,k,j,i) = kj_perp;
+            fdif.thermKappa(fdif.kappa_TE_para,k,j,i) = kj_wedge;
+            }
+        }
+    }
+
+
+    return;
+}
