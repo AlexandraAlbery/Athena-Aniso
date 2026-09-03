@@ -156,9 +156,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
 
     // Comment these out to test case 0-4 with constant coeffs
     // These are used to check timesteps for case 5
-    EnrollConductionCoefficient(CalculateThermalKappa);
-    EnrollViscosityCoefficient(CalculateViscousNu);
-    EnrollFieldDiffusivity(CalculateMagDiff);
+    //EnrollConductionCoefficient(CalculateThermalKappa);
+    //EnrollViscosityCoefficient(CalculateViscousNu);
+    //EnrollFieldDiffusivity(CalculateMagDiff);
 
     return;
 }
@@ -222,7 +222,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     // 2 - Linear wave - Hall effect / magnetic diffusion,
     // 3 - temperature and field tubes (thermoelectric effects)
     // 4 - Righi-Leduc: Beltrami field + transverse T gradient
-    // 5 - timestep output - WIP
+    // 5 - timestep output - rho, T, |B| parameter scan, nlim=0
 
     switch (problem_ID)
     {
@@ -437,7 +437,44 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                 }
             }
             break;}
-        case 5:{break;}
+        case 5:{
+                // ---- (T, rho, |B|) sweep for the timestep check ----
+                // x -> T,  y -> rho,  z -> |B|.  Log-spaced about the base state.
+                // Run single-block with time/nlim=0.
+                // Run with uniform cartesian grid
+                Real dx = pcoord->dx1f(1);
+                Real T_0 = P_0/rho_0;
+                Real B_0 = std::abs(Bx_0);
+
+                int nT = ie - is + 1, nR = je - js + 1, nB = ke - ks + 1;
+                AthenaArray<Real> Tg, Rg, Bg;
+                Tg.NewAthenaArray(nT);  Rg.NewAthenaArray(nR);  Bg.NewAthenaArray(nB);
+                for (int n = 0; n < nT; n++) Tg(n)   = T_0*std::pow(10.0, dx*(n - 0.5*(nT-1)));
+                for (int n = 0; n < nR; n++) Rg(n)   = rho_0*std::pow(10.0, dx*(n - 0.5*(nR-1)));
+                for (int n = 0; n < nB; n++) Bg(n)   = B_0*std::pow(10.0, dx*(n - 0.5*(nB-1)));
+
+                for (int k = ks; k <= ke+1; k++) {
+                    Real Bl = Bg(std::min(k - ks, nB-1));
+                    for (int j = js; j <= je+1; j++) {
+                        for (int i = is; i <= ie+1; i++) {
+                            pfield->b.x1f(k,j,i) = Bl*Bx_0/B_0;
+                            pfield->b.x2f(k,j,i) = 0.0;
+                            pfield->b.x3f(k,j,i) = 0.0;
+                        }
+                    }
+                }
+                for (int k = ks; k <= ke; k++) {
+                    for (int j = js; j <= je; j++) {
+                        for (int i = is; i <= ie; i++) {
+                            phydro->u(IDN,k,j,i) = Rg(j-js);
+                            phydro->u(IM1,k,j,i) = 0.0;
+                            phydro->u(IM2,k,j,i) = 0.0;
+                            phydro->u(IM3,k,j,i) = 0.0;
+                            phydro->u(IEN,k,j,i) = Rg(j-js)*Tg(i-is)/gm1 + 0.5*SQR(Bg(k-ks));
+                        }
+                    }
+                }
+            break;}
     default:
         std::cout << "ERROR. Problem_ID can be: \n"
         << "0 - temperature gradient (thermal conduction), \n "
