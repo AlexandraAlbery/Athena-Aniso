@@ -124,7 +124,8 @@ FieldDiffusion::FieldDiffusion(MeshBlock *pmb, ParameterInput *pin) :
       CalcMagDiffCoeff_ = pmb->pmy_mesh->FieldDiffusivity_;
   }
 
-  if (field_diffusion_defined && RELATIVISTIC_DYNAMICS) {
+  if (field_diffusion_defined && RELATIVISTIC_DYNAMICS
+    && Globals::my_rank == 0 && pmb->gid == 0) {
     std::stringstream msg;
     msg << "### FATAL ERROR in FieldDiffusion" << std::endl
         << "Diffusion is incompatibile with relativistic dynamics" << std::endl;
@@ -208,7 +209,8 @@ void FieldDiffusion::CalcDiffusionEMF(FaceField &bi, const AthenaArray<Real> &bc
   && (kappa_aniso_TE_para == 0) && (kappa_aniso_TE_perp == 0)
   && (kappa_aniso_TE_wedge == 0)) return;
 
-  if(!NON_BAROTROPIC_EOS && ( use_TE_para || use_TE_perp ||use_TE_wedge)) {
+  if(!NON_BAROTROPIC_EOS && ( use_TE_para || use_TE_perp ||use_TE_wedge)
+     && Globals::my_rank == 0 && pmy_block->gid == 0) {
     std::stringstream msg;
     msg << "### FATAL ERROR in FieldDiffusion" << std::endl
         << "Thermoelectric effects are incompatible with isothermal MHD" << std::endl;

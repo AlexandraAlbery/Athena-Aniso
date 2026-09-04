@@ -240,7 +240,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
             Real T_0 = P_0/rho_0;
             Real A_T = pin->GetOrAddReal("problem","gauss_amp_T", 1.0e-1);
             Real L = xmax - xmin;
-            Real sigma = 0.05 * L;
+            Real sigma = 0.1 * L;
             Real inv2s2 = 1.0/(2.0*SQR(sigma));
             Real B_energy = 0.5*(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
             Real x = 0; Real y = 0; Real z = 0; Real r2 = 0; Real T_local = 0;

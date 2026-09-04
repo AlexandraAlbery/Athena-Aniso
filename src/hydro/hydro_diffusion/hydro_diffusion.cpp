@@ -109,7 +109,7 @@ HydroDiffusion::HydroDiffusion(Hydro *phyd, ParameterInput *pin) :
     if(kappa_aniso_neutral > 0.0 ||  kappa_aniso_para > 0.0 || kappa_aniso_perp > 0.0 ||
       kappa_aniso_wedge > 0.0) aniso_conduction = true;
 
-    if(kappa_iso > 0.0 && aniso_conduction) {
+    if(kappa_iso > 0.0 && aniso_conduction && Globals::my_rank == 0 && pmb_->gid == 0) {
         std::stringstream msg;
         msg << "### FATAL ERROR in HydroDiffusion" << std::endl
         << "Isotropic and ansiotropic thermal conduction cannot be activavted together"
@@ -151,7 +151,8 @@ HydroDiffusion::HydroDiffusion(Hydro *phyd, ParameterInput *pin) :
       }
   }
 
-  if (hydro_diffusion_defined && RELATIVISTIC_DYNAMICS) {
+  if (hydro_diffusion_defined && RELATIVISTIC_DYNAMICS
+      && Globals::my_rank == 0 && pmb_->gid == 0) {
     std::stringstream msg;
     msg << "### FATAL ERROR in HydroDiffusion" << std::endl
         << "Diffusion is incompatibile with relativistic dynamics" << std::endl;
