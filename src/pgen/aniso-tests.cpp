@@ -72,6 +72,8 @@ const int out_dt_TE        = 20; // unsplit isolated TE (P/S + N/E)
 const int out_dt_TE_hyp    = 21; // Hall+P/S
 const int out_dt_total     = 22; // Actual timestep
 
+const int out_WP           = 23;
+
 
 // Initialise functions
 void GetTemperature(MeshBlock *pmb);
@@ -90,6 +92,7 @@ void CalculateViscousNu(HydroDiffusion *phdif, MeshBlock *pmb,
 void CalculateMagDiff(FieldDiffusion *pfdif, MeshBlock *pmb,
     const AthenaArray<double> &w, const AthenaArray<double> &bmag,
     int is, int ie, int js, int je, int ks, int ke);
+void CalculateWellPosedness(MeshBlock *pmb);
 
 void Mesh::InitUserMeshData(ParameterInput *pin) {
 
@@ -176,6 +179,7 @@ void MeshBlock::InitUserMeshBlockData(ParameterInput *pin) {
     SetUserOutputVariableName(out_TEWwave,"Peltier+Seebeck+Hall speed");
     SetUserOutputVariableName(out_GVwave,"Gyro-Viscous speed");
     SetUserOutputVariableName(out_RLspeed,"Righi-Leduc speed");
+    SetUserOutputVariableName(out_WP, "Well-posed Criterion");
 
     SetUserOutputVariableName(out_dt_ideal,"Ideal dt");
     SetUserOutputVariableName(out_dt_vis_para ,"Viscoisty dt");
@@ -425,9 +429,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                     }
                 }
             }
-
-            // Uniform rho: the grad(rho) . (b x grad T) term then vanishes identically,
-            // leaving the pure advective RL contribution.
             for (int k = ks; k <= ke; k++) {
                 Real z = this->pcoord->x3v(k);
                 Real g = 1.0 - A_B*std::sin(kB*z);
@@ -482,35 +483,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                         }
                     }
                 }
-            break;}
-        case 6:{ // ---- Longitudinal wave: bulk + isotropic + parallel viscosity ----
-            // div(v) != 0, so zeta acts at leading order. Damping (Stokes-Kirchhoff):
-            //   gamma = 0.5*K^2*nu_eff
-            //   isotropic:  nu_eff = (4/3)*nu_iso + zeta/rho
-            //   Braginskii: nu_eff = 3*nu_para*(u - 1/3)^2,  u = (b.khat)^2
-            // Note nu_eff for the isotropic case is exactly nu_max in NewDiffusionDt.
-            Real A     = pin->GetOrAddReal("problem","sound_amp", 1.0e-3);
-            Real nwave = pin->GetOrAddReal("problem","sound_nwave", 1.0);
-            Real L     = xmax - xmin;
-            Real K     = 2.0*PI*nwave/L;
-            Real cs    = std::sqrt(Gamma*P_0/rho_0);
-            Real B_energy = 0.5*(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
-
-            for (int k = ks; k <= ke; k++) {
-                for (int j = js; j <= je; j++) {
-                    for (int i = is; i <= ie; i++) {
-                        Real s     = std::sin(K*this->pcoord->x1v(i));
-                        Real rho_l = rho_0*(1.0 + A*s);
-                        Real vx    = A*cs*s;
-                        Real P_l   = P_0 + rho_0*cs*vx;      // = P_0 + cs^2*rho_0*A*s
-                        phydro->u(IDN,k,j,i) = rho_l;
-                        phydro->u(IM1,k,j,i) = rho_l*vx;
-                        phydro->u(IM2,k,j,i) = 0.0;
-                        phydro->u(IM3,k,j,i) = 0.0;
-                        phydro->u(IEN,k,j,i) = P_l/gm1 + 0.5*rho_l*SQR(vx) + B_energy;
-                    }
-                }
-            }
             break;}
     default:
         std::cout << "ERROR. Problem_ID can be: \n"
@@ -598,6 +570,7 @@ void MeshBlock::UserWorkBeforeOutput(ParameterInput *pin) {
 
     GetTemperature(this);
     GetWaveSpeeds(this);
+    CalculateWellPosedness(this);
     if(problem_ID==5) GetTimeSteps(this);
 
     return;
@@ -1107,6 +1080,35 @@ void CalculateMagDiff(FieldDiffusion *pfdif, MeshBlock *pmb,
         }
     }
 
+
+    return;
+}
+
+void CalculateWellPosedness(MeshBlock *pmb){
+
+    // Get position indicies
+    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+
+    Real gm1 = pmb->peos->GetGamma() - 1.0;
+
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                Real HII = pmb->phydro->hdif.ion_frac(k,j,i);
+                Real kn = pmb->phydro->hdif.kappa(HydroDiffusion::kappa_neutral,k,j,i);
+                Real kp = pmb->phydro->hdif.kappa(HydroDiffusion::kappa_perp,k,j,i);
+                Real eta_o = pmb->pfield->fdif.etaB(FieldDiffusion::ohmic,k,j,i);
+                Real eta_ad = pmb->pfield->fdif.etaB(FieldDiffusion::ambipolar,k,j,i);
+                Real kjw = pmb->pfield->fdif.thermKappa(FieldDiffusion::ThermElecProcess::
+                    kappa_TE_wedge,k,j,i);
+
+                Real wp = gm1*((1-HII)*kn + HII*kp)*(eta_o+eta_ad) - kjw*kjw*HII*HII/pmb->phydro->u(IEN,k,j,i);
+                pmb->user_out_var(out_WP,k,j,i) = wp;
+
+            }
+        }
+    }
 
     return;
 }

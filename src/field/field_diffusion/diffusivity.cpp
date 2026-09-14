@@ -943,7 +943,7 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
           }
           x2flux(k,j,i) += qJy_wedge;
           x2flux_disp(k,j,i) += qJy_para + qJy_perp;
-          if(!STS_ENABLED) x2flux(k,j,i) += qJx_para + qJx_perp;
+          if(!STS_ENABLED) x2flux(k,j,i) += qJy_para + qJy_perp;
       } // i loop
     } // j loop
   } // k loop
@@ -1002,7 +1002,7 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
           }
           x3flux(k,j,i) += qJz_wedge;
           x3flux_disp(k,j,i) += qJz_para + qJz_perp;
-          if(!STS_ENABLED) x3flux(k,j,i) += qJx_para + qJx_perp;
+          if(!STS_ENABLED) x3flux(k,j,i) += qJz_para + qJz_perp;
         } // i loop
       } // j loop
     } // k loop
