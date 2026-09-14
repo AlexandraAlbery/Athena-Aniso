@@ -263,7 +263,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     case 1:{ // ---- Shear layer for viscosity ----
     Real L  = xmax - xmin;
     Real K  = 2.0*PI/L; // one full wavelength across the box (periodic in x)
-    Real v0 = 1.0e-3;
+    Real v0 = 1.0e-1;
     Real x  = 0; Real vy = 0;
 
     for (int k = ks; k <= ke; k++ ) {
@@ -436,13 +436,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                         Real x  = this->pcoord->x1v(i);
                         Real T_local = T_0*(1.0 + A_T*std::sin(kT*x));
                         Real vy = v0*std::sin(kT*x);
-                        phydro->u(IDN,k,j,i) = rho_0;
+                        phydro->u(IDN,k,j,i) = P_0/T_local;
                         phydro->u(IM1,k,j,i) = 0.0;
                         phydro->u(IM2,k,j,i) = rho_0*vy;
                         phydro->u(IM3,k,j,i) = 0.0;
-                        phydro->u(IEN,k,j,i) = rho_0*T_local/gm1
-                                                + 0.5*rho_0*vy*vy
-                                                + 0.5*SQR(B0*g);
+                        phydro->u(IEN,k,j,i) = P_0/gm1 + 0.5*rho_0*vy*vy + 0.5*SQR(B0*g);
                     }
                 }
             }
@@ -484,6 +482,35 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                         }
                     }
                 }
+            break;}
+        case 6:{ // ---- Longitudinal wave: bulk + isotropic + parallel viscosity ----
+            // div(v) != 0, so zeta acts at leading order. Damping (Stokes-Kirchhoff):
+            //   gamma = 0.5*K^2*nu_eff
+            //   isotropic:  nu_eff = (4/3)*nu_iso + zeta/rho
+            //   Braginskii: nu_eff = 3*nu_para*(u - 1/3)^2,  u = (b.khat)^2
+            // Note nu_eff for the isotropic case is exactly nu_max in NewDiffusionDt.
+            Real A     = pin->GetOrAddReal("problem","sound_amp", 1.0e-3);
+            Real nwave = pin->GetOrAddReal("problem","sound_nwave", 1.0);
+            Real L     = xmax - xmin;
+            Real K     = 2.0*PI*nwave/L;
+            Real cs    = std::sqrt(Gamma*P_0/rho_0);
+            Real B_energy = 0.5*(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
+
+            for (int k = ks; k <= ke; k++) {
+                for (int j = js; j <= je; j++) {
+                    for (int i = is; i <= ie; i++) {
+                        Real s     = std::sin(K*this->pcoord->x1v(i));
+                        Real rho_l = rho_0*(1.0 + A*s);
+                        Real vx    = A*cs*s;
+                        Real P_l   = P_0 + rho_0*cs*vx;      // = P_0 + cs^2*rho_0*A*s
+                        phydro->u(IDN,k,j,i) = rho_l;
+                        phydro->u(IM1,k,j,i) = rho_l*vx;
+                        phydro->u(IM2,k,j,i) = 0.0;
+                        phydro->u(IM3,k,j,i) = 0.0;
+                        phydro->u(IEN,k,j,i) = P_l/gm1 + 0.5*rho_l*SQR(vx) + B_energy;
+                    }
+                }
+            }
             break;}
     default:
         std::cout << "ERROR. Problem_ID can be: \n"
