@@ -113,23 +113,21 @@ void ConstDiffusivity(FieldDiffusion *pfdif, MeshBlock *pmb, const AthenaArray<R
 void FieldDiffusion::CalcEdgeTemperature(const AthenaArray<Real> &w,
                                          AthenaArray<Real> &Tcc, AthenaArray<Real> &Te1,
                                          AthenaArray<Real> &Te2, AthenaArray<Real> &Te3) {
+  Tcc.ZeroClear();
   Te1.ZeroClear();
   Te2.ZeroClear();
   Te3.ZeroClear();
   MeshBlock *pmb = pmy_block;
   Coordinates *pco = pmb->pcoord;
 
-  int ext2 = 0,ext3 = 0;
   int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
   int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
 
   const bool nx2 = (pmb->block_size.nx2 > 1);
   const bool nx3 = (pmb->block_size.nx3 > 1);
 
-  AthenaArray<Real> T_;
-
   if (!nx2 && !nx3) {
-    for (int i=is-NGHOST; i<=ie+NGHOST+1; i++) {
+    for (int i=is-NGHOST; i<=ie+NGHOST; i++) {
       Tcc(ks,js,i) = w(IPR, ks, js, i)/w(IDN, ks, js, i);
     }
   } else if (!nx3) {
@@ -149,13 +147,13 @@ void FieldDiffusion::CalcEdgeTemperature(const AthenaArray<Real> &w,
   }
 
   if (!nx2 && !nx3) { // 1D T edge
-    for (int i=is; i<=ie+2; i++) {
+    for (int i=is-1; i<=ie+2; i++) {
     Te2(ks,js,i) = 0.5*(Tcc(ks,js,i) + Tcc(ks,js,i-1));
     Te3(ks,js,i) = Te2(ks,js,i);
     }
   } else if (!nx3) { // 2D T edge
-    for (int j=js; j<=je+2; j++) {
-      for (int i = is; i<=ie+2; i++) {
+    for (int j=js-1; j<=je+2; j++) {
+      for (int i = is-1; i<=ie+2; i++) {
         Te1(ks,j,i) = 0.5*(Tcc(ks,j-1,i) + Tcc(ks,j,i));
         Te2(ks,j,i) = 0.5*(Tcc(ks,j,i-1) + Tcc(ks, j, i));
         Te3(ks,j,i) = 0.25*(Tcc(ks,j,i) + Tcc(ks,j-1,i)
@@ -163,9 +161,9 @@ void FieldDiffusion::CalcEdgeTemperature(const AthenaArray<Real> &w,
       }
     }
   } else { // 3D T edge
-    for (int k = ks; k<=ke+2; k++) {
-      for (int j=js; j<=je+2; j++) {
-        for (int i = is; i<=ie+2; i++) {
+    for (int k = ks-1; k<=ke+2; k++) {
+      for (int j=js-1; j<=je+2; j++) {
+        for (int i = is-1; i<=ie+2; i++) {
           Te1(k,j,i) = 0.25*(Tcc(k,j,i) + Tcc(k-1,j,i) + Tcc(k,j-1,i) + Tcc(k-1,j-1,i));
           Te2(k,j,i) = 0.25*(Tcc(k,j,i) + Tcc(k-1,j,i) + Tcc(k,j,i-1) + Tcc(k-1,j,i-1));
           Te3(k,j,i) = 0.25*(Tcc(k,j,i) + Tcc(k,j-1,i) + Tcc(k,j,i-1) + Tcc(k,j-1,i-1));
@@ -175,8 +173,6 @@ void FieldDiffusion::CalcEdgeTemperature(const AthenaArray<Real> &w,
   }
   return;
 }
-
-
 
 //----------------------------------------------------------------------------------------
 //! \fn void FieldDiffusion::CalcCurrent

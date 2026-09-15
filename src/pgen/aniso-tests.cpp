@@ -352,18 +352,18 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                 ATHENA_ERROR(msg);
             }
 
-            // Temperature tube at the origin, uniform density
+            // Temperature tube at the origin, uniform pressure
             for (int k = ks; k <= ke; k++) {
                 Real z = this->pcoord->x3v(k);
                 for (int j = js; j <= je; j++) {
                     for (int i = is; i <= ie; i++) {
                         Real x = this->pcoord->x1v(i);
                         Real T_local = T_0*(1.0 + A_T*std::exp(-(SQR(x) + SQR(z))*inv2s2));
-                        phydro->u(IDN,k,j,i) = rho_0;
+                        phydro->u(IDN,k,j,i) = P_0/T_local;
                         phydro->u(IM1,k,j,i) = 0.0;
                         phydro->u(IM2,k,j,i) = 0.0;
                         phydro->u(IM3,k,j,i) = 0.0;
-                        phydro->u(IEN,k,j,i) = rho_0*T_local/gm1;
+                        phydro->u(IEN,k,j,i) = P_0/gm1;
                     }
                 }
             }
@@ -1103,7 +1103,8 @@ void CalculateWellPosedness(MeshBlock *pmb){
                 Real kjw = pmb->pfield->fdif.thermKappa(FieldDiffusion::ThermElecProcess::
                     kappa_TE_wedge,k,j,i);
 
-                Real wp = gm1*((1-HII)*kn + HII*kp)*(eta_o+eta_ad) - kjw*kjw*HII*HII/pmb->phydro->u(IEN,k,j,i);
+                Real wp = gm1*((1-HII)*kn + HII*kp)*(eta_o+eta_ad) /
+                          kjw*kjw*HII*HII/pmb->phydro->w(IEN,k,j,i)/gm1;
                 pmb->user_out_var(out_WP,k,j,i) = wp;
 
             }

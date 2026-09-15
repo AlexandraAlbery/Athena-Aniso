@@ -104,7 +104,7 @@ FieldDiffusion::FieldDiffusion(MeshBlock *pmb, ParameterInput *pin) :
     field_disp_defined = (eta_hall > 0.0 || use_TE_para || use_TE_perp);
 
     if (use_TE_para || use_TE_perp || use_TE_wedge) {
-      Tcc.NewAthenaArray(nc3, nc2, nc1);
+      Tcc.NewAthenaArray(nc3+1, nc2+1, nc1+1);
       Te1.NewAthenaArray(nc3+1, nc2+1, nc1+1);
       Te2.NewAthenaArray(nc3+1, nc2+1, nc1+1);
       Te3.NewAthenaArray(nc3+1, nc2+1, nc1+1);
