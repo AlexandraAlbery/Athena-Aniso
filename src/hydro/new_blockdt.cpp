@@ -307,7 +307,7 @@ void Hydro::NewBlockTimeStep() {
   // set main integrator timestep as the minimum of the appropriate timestep constraints:
   // hyperbolic: (skip if fluid is nonexistent or frozen)
   min_dt = std::min(min_dt, min_dt_hyperbolic);
-  min_dt = std::min(min_dt, min_dt_parabolic);
+  if(!STS_ENABLED) min_dt = std::min(min_dt, min_dt_parabolic);
   // user:
   if (UserTimeStep_ != nullptr) {
     min_dt_user = UserTimeStep_(pmb);
