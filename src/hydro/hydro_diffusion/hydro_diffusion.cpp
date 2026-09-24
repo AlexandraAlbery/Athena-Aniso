@@ -100,8 +100,6 @@ HydroDiffusion::HydroDiffusion(Hydro *phyd, ParameterInput *pin) :
     kappa_aniso_para = pin->GetOrAddReal("problem", "kappa_aniso_para", 0.0);
     kappa_aniso_perp = pin->GetOrAddReal("problem", "kappa_aniso_perp", 0.0);
     kappa_aniso_wedge = pin->GetOrAddReal("problem", "kappa_aniso_wedge", 0.0);
-    limit_saturated_conduction = pin->GetOrAddBoolean("problem",
-                                                      "limit_saturated_conduction", 1);
 
     cnd_aniso_para   = (kappa_aniso_neutral > 0.0 || kappa_aniso_para > 0.0
                         || kappa_aniso_perp > 0.0);
@@ -133,6 +131,10 @@ HydroDiffusion::HydroDiffusion(Hydro *phyd, ParameterInput *pin) :
     }
 
     if (aniso_conduction) {
+      limit_saturated_conduction = pin->GetOrAddBoolean("problem",
+        "limit_saturated_conduction", true);
+      flux_limit_conduction = pin->GetOrAddBoolean("problem",
+        "flux_limit_conduction", true);
       hydro_diffusion_defined = true;
       conduction_on = true;
       cndflx[X1DIR].NewAthenaArray(nc3, nc2, nc1+1);
@@ -151,6 +153,13 @@ HydroDiffusion::HydroDiffusion(Hydro *phyd, ParameterInput *pin) :
       else
         CalcCondCoeff_ = pmb_->pmy_mesh->ConductionCoeff_;
       }
+  }
+
+  if(aniso_viscosity) {
+    limit_pressure_anisotropy = pin->GetOrAddBoolean("problem",
+      "limit_pressure_anisotropy", true);
+    flux_limit_viscosity = pin->GetOrAddBoolean("problem",
+      "flux_limit_viscosity", true);
   }
 
   if (hydro_diffusion_defined && RELATIVISTIC_DYNAMICS

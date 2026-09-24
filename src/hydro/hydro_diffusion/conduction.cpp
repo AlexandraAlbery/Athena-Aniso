@@ -177,6 +177,9 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
   const bool use_wedge   = (HydroDiffusion::kappa_aniso_wedge > 0.0) && calc_disp_;
 
   const bool use_sat = HydroDiffusion::limit_saturated_conduction;
+  const bool lim_c = HydroDiffusion::flux_limit_conduction;
+
+  using ConductionLimiters::LimitedTransverse;
 
   // i-direction
   jl = js, ju = je, kl = ks, ku = ke;
@@ -216,34 +219,36 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
       }
       // SH1: eq:17 & 18 limited transverse gradients for para/perp
       dTdy_t = dTdy; dTdz_t = dTdz;
-      if (f2) { // limited dT/dy
-        dTdy_t = ConductionLimiters::LimitedTransverse(
-            ( (p(IPR,k,j+1,i)/p(IDN,k,j+1,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
-            /(pco_->h2f(i)*pco_->dx2v(j)),
+      if(lim_c) {
+        if (f2) { // limited dT/dy
+          dTdy_t = LimitedTransverse(
+              ( (p(IPR,k,j+1,i)/p(IDN,k,j+1,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+              /(pco_->h2f(i)*pco_->dx2v(j)),
 
-            ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
-            /(pco_->h2f(i)*pco_->dx2v(j-1)),
+              ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
+              /(pco_->h2f(i)*pco_->dx2v(j-1)),
 
-            ( (p(IPR,k,j+1,i-1)/p(IDN,k,j+1,i-1)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) )
-            /(pco_->h2f(i)*pco_->dx2v(j)),
+              ( (p(IPR,k,j+1,i-1)/p(IDN,k,j+1,i-1)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) )
+              /(pco_->h2f(i)*pco_->dx2v(j)),
 
-            ( (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) - (p(IPR,k,j-1,i-1)/p(IDN,k,j-1,i-1)) )
-            /(pco_->h2f(i)*pco_->dx2v(j-1)));
-      }
-      if (f3) { // limited dT/dz
-        dTdz_t = ConductionLimiters::LimitedTransverse(
-            ( (p(IPR,k+1,j,i)/p(IDN,k+1,j,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
-            /(pco_->dx3v(k)*pco_->h31f(i)*pco_->h32v(j)),
+              ( (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) - (p(IPR,k,j-1,i-1)/p(IDN,k,j-1,i-1)) )
+              /(pco_->h2f(i)*pco_->dx2v(j-1)));
+        }
+        if (f3) { // limited dT/dz
+          dTdz_t = LimitedTransverse(
+              ( (p(IPR,k+1,j,i)/p(IDN,k+1,j,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+              /(pco_->dx3v(k)*pco_->h31f(i)*pco_->h32v(j)),
 
-            ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
-            /(pco_->dx3v(k-1)*pco_->h31f(i)*pco_->h32v(j)),
+              ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
+              /(pco_->dx3v(k-1)*pco_->h31f(i)*pco_->h32v(j)),
 
-            ((p(IPR,k+1,j,i-1)/p(IDN,k+1,j,i-1)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)))
-            /(pco_->dx3v(k)*pco_->h31f(i)*pco_->h32v(j)),
+              ((p(IPR,k+1,j,i-1)/p(IDN,k+1,j,i-1)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)))
+              /(pco_->dx3v(k)*pco_->h31f(i)*pco_->h32v(j)),
 
-            ( (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) - (p(IPR,k-1,j,i-1)/p(IDN,k-1,j,i-1)) )
-            /(pco_->dx3v(k-1)*pco_->h31f(i)*pco_->h32v(j)));
-      }
+              ( (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) - (p(IPR,k-1,j,i-1)/p(IDN,k-1,j,i-1)) )
+              /(pco_->dx3v(k-1)*pco_->h31f(i)*pco_->h32v(j)));
+        }
+      } // end if lim_c
 
       Bx = pmb_->pfield->b.x1f(k,j,i);
       By = 0.5*(pmb_->pfield->bcc(IB2, k,j,i) + pmb_->pfield->bcc(IB2, k,j,i-1));
@@ -341,33 +346,35 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
 
       // SH1: eq:17 & 18 limited transverse gradients for para/perp
       dTdx_t = dTdx; dTdz_t = dTdz;
+      if(lim_c){
         // limited dT/dx
-      dTdx_t = ConductionLimiters::LimitedTransverse(
-          ( (p(IPR,k,j,i+1)/p(IDN,k,j,i+1)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
-          /pco_->dx1v(i),
+        dTdx_t = LimitedTransverse(
+            ( (p(IPR,k,j,i+1)/p(IDN,k,j,i+1)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+            /pco_->dx1v(i),
 
-          ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) )
-          /pco_->dx1v(i-1),
+            ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) )
+            /pco_->dx1v(i-1),
 
-          ( (p(IPR,k,j-1,i+1)/p(IDN,k,j-1,i+1)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
-          /pco_->dx1v(i),
+            ( (p(IPR,k,j-1,i+1)/p(IDN,k,j-1,i+1)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
+            /pco_->dx1v(i),
 
-          ( (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) - (p(IPR,k,j-1,i-1)/p(IDN,k,j-1,i-1)) )
-          /pco_->dx1v(i-1));
-      if (f3) { // limited dT/dz
-        dTdz_t = ConductionLimiters::LimitedTransverse(
-            ( (p(IPR,k+1,j,i)/p(IDN,k+1,j,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
-            /(pco_->dx3v(k)*pco_->h31v(i)*pco_->h32f(j)),
+            ( (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) - (p(IPR,k,j-1,i-1)/p(IDN,k,j-1,i-1)) )
+            /pco_->dx1v(i-1));
+        if (f3) { // limited dT/dz
+          dTdz_t = LimitedTransverse(
+              ( (p(IPR,k+1,j,i)/p(IDN,k+1,j,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+              /(pco_->dx3v(k)*pco_->h31v(i)*pco_->h32f(j)),
 
-            ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
-            /(pco_->dx3v(k-1)*pco_->h31v(i)*pco_->h32f(j)),
+              ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
+              /(pco_->dx3v(k-1)*pco_->h31v(i)*pco_->h32f(j)),
 
-            ( (p(IPR,k+1,j-1,i)/p(IDN,k+1,j-1,i)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
-            /(pco_->dx3v(k)*pco_->h31v(i)*pco_->h32f(j)),
+              ( (p(IPR,k+1,j-1,i)/p(IDN,k+1,j-1,i)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
+              /(pco_->dx3v(k)*pco_->h31v(i)*pco_->h32f(j)),
 
-            ( (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) - (p(IPR,k-1,j-1,i)/p(IDN,k-1,j-1,i)) )
-            /(pco_->dx3v(k-1)*pco_->h31v(i)*pco_->h32f(j)));
-      }
+              ( (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) - (p(IPR,k-1,j-1,i)/p(IDN,k-1,j-1,i)) )
+              /(pco_->dx3v(k-1)*pco_->h31v(i)*pco_->h32f(j)));
+        }
+      } // end if lim_c
 
       Bx = 0.5*(pmb_->pfield->bcc(IB1, k,j,i) + pmb_->pfield->bcc(IB1, k,j-1,i));
       By =  pmb_->pfield->b.x2f(k,j,i);
@@ -472,32 +479,34 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
 
          // SH1: eq:17 & 18 limited transverse gradients for para/perp
          dTdx_t = dTdx; dTdy_t = dTdy;
-         dTdx_t = ConductionLimiters::LimitedTransverse( // limited dT/dx
-            ( (p(IPR,k,j,i+1)/p(IDN,k,j,i+1)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
-            /pco_->dx1v(i),
+         if(lim_c){
+          dTdx_t = LimitedTransverse( // limited dT/dx
+              ( (p(IPR,k,j,i+1)/p(IDN,k,j,i+1)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+              /pco_->dx1v(i),
 
-            ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) )
-            /pco_->dx1v(i-1),
+              ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) )
+              /pco_->dx1v(i-1),
 
-            ( (p(IPR,k-1,j,i+1)/p(IDN,k-1,j,i+1)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
-            /pco_->dx1v(i),
+              ( (p(IPR,k-1,j,i+1)/p(IDN,k-1,j,i+1)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
+              /pco_->dx1v(i),
 
-            ( (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) - (p(IPR,k-1,j,i-1)/p(IDN,k-1,j,i-1)) )
-            /pco_->dx1v(i-1));
-         if (f2) { // limited dT/dy
-          dTdy_t = ConductionLimiters::LimitedTransverse(
-              ( (p(IPR,k,j+1,i)/p(IDN,k,j+1,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
-              /(pco_->h2v(i)*pco_->dx2v(j)),
+              ( (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) - (p(IPR,k-1,j,i-1)/p(IDN,k-1,j,i-1)) )
+              /pco_->dx1v(i-1));
+          if (f2) { // limited dT/dy
+            dTdy_t = LimitedTransverse(
+                ( (p(IPR,k,j+1,i)/p(IDN,k,j+1,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+                /(pco_->h2v(i)*pco_->dx2v(j)),
 
-              ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
-              /(pco_->h2v(i)*pco_->dx2v(j-1)),
+                ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
+                /(pco_->h2v(i)*pco_->dx2v(j-1)),
 
-              ( (p(IPR,k-1,j+1,i)/p(IDN,k-1,j+1,i)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
-              /(pco_->h2v(i)*pco_->dx2v(j)),
+                ( (p(IPR,k-1,j+1,i)/p(IDN,k-1,j+1,i)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
+                /(pco_->h2v(i)*pco_->dx2v(j)),
 
-              ( (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) - (p(IPR,k-1,j-1,i)/p(IDN,k-1,j-1,i)) )
-              /(pco_->h2v(i)*pco_->dx2v(j-1)));
-        }
+                ( (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) - (p(IPR,k-1,j-1,i)/p(IDN,k-1,j-1,i)) )
+                /(pco_->h2v(i)*pco_->dx2v(j-1)));
+          }
+        } // end if lim_c
 
         Bx = 0.5*(pmb_->pfield->bcc(IB1, k,j,i) + pmb_->pfield->bcc(IB1, k-1,j,i));
         By = 0.5*(pmb_->pfield->bcc(IB2, k,j,i) + pmb_->pfield->bcc(IB2, k-1,j,i));

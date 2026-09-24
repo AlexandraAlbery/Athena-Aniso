@@ -59,6 +59,10 @@ class HydroDiffusion {
   bool cnd_disp_defined  = false;   // kappa wedge;
 
   bool limit_saturated_conduction = true; // Apply saturation limiting for conduction
+  bool limit_pressure_anisotropy = true; // firehose/mirror instability for viscosity
+
+  bool flux_limit_conduction = true; // anisotropic conduction flux limiter
+  bool flux_limit_viscosity = true;  // anisotropic viscosity flux limiter
 
   // viscosity
   Real nu_iso, nu_aniso_neutral, nu_aniso_para, nu_aniso_perp1, nu_aniso_perp2,
