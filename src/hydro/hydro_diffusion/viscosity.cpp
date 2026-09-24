@@ -408,12 +408,12 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
 
         Real dvx_dx = (p_i(IM1,k,j,i) - p_i(IM1,k,j,i-1)) / (pco_->dx1v(i-1));
 
-        Real dvx_dy = 0.5 * ( (p_i(IM1,k,j+1,i) + p_i(IM1,k,j+1,i-1))
+        Real dvx_dy = !f2 ? 0.0 : 0.5 * ( (p_i(IM1,k,j+1,i) + p_i(IM1,k,j+1,i-1))
                             - (p_i(IM1,k,j-1,i) + p_i(IM1,k,j-1,i-1)) )
                       / pco_->h2f(i)
                       / (pco_->dx2v(j-1) + pco_->dx2v(j));
 
-        Real dvx_dz = 0.5 * ( (p_i(IM1,k+1,j,i) + p_i(IM1,k+1,j,i-1))
+        Real dvx_dz = !f3 ? 0.0 : 0.5 * ( (p_i(IM1,k+1,j,i) + p_i(IM1,k+1,j,i-1))
                             - (p_i(IM1,k-1,j,i) + p_i(IM1,k-1,j,i-1)) )
                       / (pco_->h31f(i) * pco_->h32v(j))
                       / (pco_->dx3v(k-1) + pco_->dx3v(k));
@@ -423,12 +423,14 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
                         - p_i(IM2,k,j,i-1) / pco_->h2v(i-1) )
                       / pco_->dx1v(i-1);
 
-        Real dvy_dy = 0.5 * ( (p_i(IM2,k,j+1,i) + p_i(IM2,k,j+1,i-1))
+        Real dvy_dy = (!f2 ? 0.0 : 0.5 * ( (p_i(IM2,k,j+1,i) + p_i(IM2,k,j+1,i-1))
                             - (p_i(IM2,k,j-1,i) + p_i(IM2,k,j-1,i-1)) )
                       / pco_->h2f(i)
-                      / (pco_->dx2v(j-1) + pco_->dx2v(j));
+                      / (pco_->dx2v(j-1) + pco_->dx2v(j)))
+                      + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j,i-1))
+                      * pco_->dh2fd1(i) / pco_->h2f(i);
 
-        Real dvy_dz = 0.5 * ( (p_i(IM2,k+1,j,i) + p_i(IM2,k+1,j,i-1))
+        Real dvy_dz = !f3 ? 0.0 : 0.5 * ( (p_i(IM2,k+1,j,i) + p_i(IM2,k+1,j,i-1))
                             - (p_i(IM2,k-1,j,i) + p_i(IM2,k-1,j,i-1)) )
                       / (pco_->h31f(i) * pco_->h32v(j))
                       / (pco_->dx3v(k-1) + pco_->dx3v(k));
@@ -438,15 +440,20 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
                         - p_i(IM3,k,j,i-1) / pco_->h31v(i-1) )
                       / pco_->dx1v(i-1);
 
-        Real dvz_dy = 0.5 * ( (p_i(IM3,k,j+1,i) + p_i(IM3,k,j+1,i-1))
-                            - (p_i(IM3,k,j-1,i) + p_i(IM3,k,j-1,i-1)) )
+        Real dvz_dy = !f2 ? 0.0 : 0.5 * pco_->h32v(j)
+                      * ( (p_i(IM3,k,j+1,i) + p_i(IM3,k,j+1,i-1)) / pco_->h32v(j+1)
+                        - (p_i(IM3,k,j-1,i) + p_i(IM3,k,j-1,i-1)) / pco_->h32v(j-1) )
                       / pco_->h2f(i)
                       / (pco_->dx2v(j-1) + pco_->dx2v(j));
 
-        Real dvz_dz = 0.5 * ( (p_i(IM3,k+1,j,i) + p_i(IM3,k+1,j,i-1))
+        Real dvz_dz = (!f3 ? 0.0 : 0.5 * ( (p_i(IM3,k+1,j,i) + p_i(IM3,k+1,j,i-1))
                             - (p_i(IM3,k-1,j,i) + p_i(IM3,k-1,j,i-1)) )
                       / (pco_->h31f(i) * pco_->h32v(j))
-                      / (pco_->dx3v(k-1) + pco_->dx3v(k));
+                      / (pco_->dx3v(k-1) + pco_->dx3v(k)))
+                      + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j,i-1))
+                           * pco_->dh31fd1(i) / pco_->h31f(i)
+                      + 0.5*(p_i(IM2,k,j,i) + p_i(IM2,k,j,i-1))
+                           * pco_->dh32vd2(j) / (pco_->h32v(j) * pco_->h2f(i));
 
         Real divv = 0.5 * (div_vel_(k,j,i) + div_vel_(k,j,i-1));
 
@@ -723,23 +730,26 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
             - p_i(IM3,k,j-1,i) / pco_->h32v(j-1) )
           / (pco_->h2v(i) * pco_->dx2v(j-1));
 
-        Real dvx_dz =
+        Real dvx_dz = !f3 ? 0.0 :
           0.5*( (p_i(IM1,k+1,j,  i) + p_i(IM1,k+1,j-1,i))
               - (p_i(IM1,k-1,j,  i) + p_i(IM1,k-1,j-1,i)) )
           / (pco_->h31v(i) * pco_->h32f(j))
           / (pco_->dx3v(k-1) + pco_->dx3v(k));
 
-        Real dvy_dz =
+        Real dvy_dz = !f3 ? 0.0 :
           0.5*( (p_i(IM2,k+1,j,  i) + p_i(IM2,k+1,j-1,i))
               - (p_i(IM2,k-1,j,  i) + p_i(IM2,k-1,j-1,i)) )
           / (pco_->h31v(i) * pco_->h32f(j))
           / (pco_->dx3v(k-1) + pco_->dx3v(k));
 
-        Real dvz_dz =
+        Real dvz_dz = (!f3 ? 0.0 :
           0.5*( (p_i(IM3,k+1,j,  i) + p_i(IM3,k+1,j-1,i))
               - (p_i(IM3,k-1,j,  i) + p_i(IM3,k-1,j-1,i)) )
           / (pco_->h31v(i) * pco_->h32f(j))
-          / (pco_->dx3v(k-1) + pco_->dx3v(k));
+          / (pco_->dx3v(k-1) + pco_->dx3v(k)))
+          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j-1,i)) * pco_->dh31vd1(i) / pco_->h31v(i)
+          + 0.5*(p_i(IM2,k,j,i) + p_i(IM2,k,j-1,i))
+               * pco_->dh32fd2(j) / (pco_->h32f(j) * pco_->h2v(i));
 
         Real divv = 0.5 * (div_vel_(k,j,i) + div_vel_(k,j-1,i));
 
@@ -1012,7 +1022,8 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
             0.5*( (p_i(IM2,k,  j+1,i) + p_i(IM2,k-1,j+1,i))
                 - (p_i(IM2,k,  j-1,i) + p_i(IM2,k-1,j-1,i)) )
             / pco_->h2v(i)
-            / (pco_->dx2v(j-1) + pco_->dx2v(j));
+            / (pco_->dx2v(j-1) + pco_->dx2v(j))
+            + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k-1,j,i)) * pco_->dh2vd1(i) / pco_->h2v(i);
 
           Real dvz_dy =
           0.5 * pco_->h32v(j)
@@ -1023,7 +1034,7 @@ void HydroDiffusion::ViscousFluxIso(const AthenaArray<Real> &p,
 
             Real dvx_dz =
             (p_i(IM1,k,j,i) - p_i(IM1,k-1,j,i))
-            / pco_->dx3v(k-1);
+            / (pco_->h31v(i) * pco_->h32v(j) * pco_->dx3v(k-1));
 
           Real dvy_dz =
             (p_i(IM2,k,j,i) - p_i(IM2,k-1,j,i))
