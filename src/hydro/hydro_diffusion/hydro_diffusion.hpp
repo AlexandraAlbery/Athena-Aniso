@@ -58,6 +58,8 @@ class HydroDiffusion {
   bool cnd_para_defined  = false;   // anything that writes cndflx under STS
   bool cnd_disp_defined  = false;   // kappa wedge;
 
+  bool limit_saturated_conduction = true; // Apply saturation limiting for conduction
+
   // viscosity
   Real nu_iso, nu_aniso_neutral, nu_aniso_para, nu_aniso_perp1, nu_aniso_perp2,
   nu_aniso_wedge1, nu_aniso_wedge2, zeta_bulk; // viscosity coeffs

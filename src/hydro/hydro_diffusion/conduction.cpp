@@ -22,6 +22,29 @@
 #include "../../field/field.hpp"
 #endif
 
+
+// Used to prevent energy from cold cells flowing into hot cells due to discretisation
+// error with strong parallel conduction
+namespace ConductionLimiters{
+  // Monotonized-central limiter: minmod(2a, 2b, (a+b)/2)
+  inline Real LimiterMC(const Real a, const Real b) {
+    if (a*b <= 0.0) return 0.0;
+    return std::signbit(a)
+           *std::min(std::min(2.0*std::abs(a), 2.0*std::abs(b)), 0.5*std::abs(a + b));
+  }
+  // SH1: P. Sharma & G.W. "Preserving Monotonicity in Anisotropic Diffusion",
+  // Journal of Computational Physics, Nov. 2007, vol. 227, No. 1, pp. 123–142,
+  // url: https://w3.pppl.gov/~hammett/gyrofluid/papers/2007/Sharma-Hammett-2007
+  // _anisotropic_diffusion.pdf
+  // limited transverse gradient at a face
+  // limit the two one-sided slopesinside each adjacent cell
+  // then limit between the two cells
+  inline Real LimitedTransverse(const Real up_R, const Real dn_R,
+                                const Real up_L, const Real dn_L) {
+    return LimiterMC(LimiterMC(up_R, dn_R), LimiterMC(up_L, dn_L));
+  }
+  } // namespace
+
 //---------------------------------------------------------------------------------------
 //! \fn void HydroDiffusion::ThermalFluxIso
 //! \brief Isotropic thermal conduction
@@ -118,6 +141,10 @@ void HydroDiffusion::ThermalFluxIso(
 //  https://static.ias.edu/pitp/2016/sites/pitp/files/braginskii_1965-1.pdf.
 //  RF1: https://farside.ph.utexas.edu/teaching/plasma/Plasma/node53.html
 //  Solves BS1 eqn(4.33) (page 249). Also see first three terms RF1 eqn(4.120)
+//  MG1: A. Mignone et. al. "The PLUTO Code for Adaptive Mesh Computations in
+//  Astrophysical Fluid Dynamics", The Astrophysical Journal Supplement Series,
+//  Jan. 2012, Vol. 198, No. 1, pp.7,
+//  URL: https://iopscience.iop.org/article/10.1088/0067-0049/198/1/7
 void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
                                       AthenaArray<Real> *flx,
                                       AthenaArray<Real> *flx_disp) {
@@ -139,7 +166,8 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
   Real kappa_para = 0.0; Real kappa_perp = 0.0; Real kappa_wedge = 0.0;
   Real Bx = 0.0; Real By = 0.0; Real Bz = 0.0; Real B = 0.0;
   Real bx = 0.0; Real by = 0.0; Real bz = 0.0;
-  Real dTdx = 0.0; Real dTdy = 0.0; Real dTdz = 0.0;
+  Real dTdx = 0.0; Real dTdy = 0.0; Real dTdz = 0.0; // Normal gradients
+  Real dTdx_t = 0.0; Real dTdy_t = 0.0; Real dTdz_t = 0.0; // Transverse gradients
   Real iso_flux = 0.0; Real para_flux = 0.0; Real perp_flux = 0.0; Real wedge_flux = 0.0;
   Real b_dot_gradT = 0.0;
 
@@ -147,6 +175,8 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
   const bool use_para    = (HydroDiffusion::kappa_aniso_para  > 0.0) && calc_para_;
   const bool use_perp    = (HydroDiffusion::kappa_aniso_perp  > 0.0) && calc_para_;
   const bool use_wedge   = (HydroDiffusion::kappa_aniso_wedge > 0.0) && calc_disp_;
+
+  const bool use_sat = HydroDiffusion::limit_saturated_conduction;
 
   // i-direction
   jl = js, ju = je, kl = ks, ku = ke;
@@ -174,7 +204,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
                 - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i) + p(IPR,k,j-1,i-1)/p(IDN,k,j-1,i-1)))
                 / pco_->h2f(i)/ (pco_->dx2v(j-1) + pco_->dx2v(j));
       } else {
-        dTdy=0;
+        dTdy = 0;
       }
       // transverse dT/dz normal to x face
       if (f3) {
@@ -184,6 +214,36 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
       } else {
         dTdz = 0.0;
       }
+      // SH1: eq:17 & 18 limited transverse gradients for para/perp
+      dTdy_t = dTdy; dTdz_t = dTdz;
+      if (f2) { // limited dT/dy
+        dTdy_t = ConductionLimiters::LimitedTransverse(
+            ( (p(IPR,k,j+1,i)/p(IDN,k,j+1,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+            /(pco_->h2f(i)*pco_->dx2v(j)),
+
+            ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
+            /(pco_->h2f(i)*pco_->dx2v(j-1)),
+
+            ( (p(IPR,k,j+1,i-1)/p(IDN,k,j+1,i-1)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) )
+            /(pco_->h2f(i)*pco_->dx2v(j)),
+
+            ( (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) - (p(IPR,k,j-1,i-1)/p(IDN,k,j-1,i-1)) )
+            /(pco_->h2f(i)*pco_->dx2v(j-1)));
+      }
+      if (f3) { // limited dT/dz
+        dTdz_t = ConductionLimiters::LimitedTransverse(
+            ( (p(IPR,k+1,j,i)/p(IDN,k+1,j,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+            /(pco_->dx3v(k)*pco_->h31f(i)*pco_->h32v(j)),
+
+            ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
+            /(pco_->dx3v(k-1)*pco_->h31f(i)*pco_->h32v(j)),
+
+            ((p(IPR,k+1,j,i-1)/p(IDN,k+1,j,i-1)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)))
+            /(pco_->dx3v(k)*pco_->h31f(i)*pco_->h32v(j)),
+
+            ( (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) - (p(IPR,k-1,j,i-1)/p(IDN,k-1,j,i-1)) )
+            /(pco_->dx3v(k-1)*pco_->h31f(i)*pco_->h32v(j)));
+      }
 
       Bx = pmb_->pfield->b.x1f(k,j,i);
       By = 0.5*(pmb_->pfield->bcc(IB2, k,j,i) + pmb_->pfield->bcc(IB2, k,j,i-1));
@@ -192,7 +252,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
 
       if (B > TINY_NUMBER) {
         bx = Bx/B; by = By/B; bz = Bz/B;
-        b_dot_gradT = bx*dTdx + by*dTdy + bz*dTdz;
+        b_dot_gradT = bx*dTdx + by*dTdy_t + bz*dTdz_t;
       } else {
         bx = 0.0; by = 0.0; bz = 0.0; b_dot_gradT = 0.0;
       }
@@ -205,7 +265,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
                        + kappa(DiffProcess::kappa_neutral,k,j,i-1));
       iso_flux = -((1-HII)*kappa_neutral*denf*dTdx);
     }
-      // Braginskii page 249 equtation 4.33 - x direction
+      // BS1: p:249 eq:4.33 - x direction
       if (use_para) {
         kappa_para = 0.5*(kappa(DiffProcess::kappa_para,k,j,i)
                      + kappa(DiffProcess::kappa_para,k,j,i-1));
@@ -215,8 +275,20 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
         kappa_perp = 0.5*(kappa(DiffProcess::kappa_perp,k,j,i)
                    + kappa(DiffProcess::kappa_perp,k,j,i-1));
         perp_flux = -(HII*kappa_perp*denf*(dTdx-bx*b_dot_gradT));
+      } // saturate the total ion flux MG1: A.3
+      if (use_sat && (use_para || use_perp)) {
+        const Real grad2 = dTdx*dTdx + dTdy_t*dTdy_t + dTdz_t*dTdz_t;
+        const Real q_para = use_para ? kappa_para*denf*std::abs(b_dot_gradT) : 0.0;
+        const Real q_perp = use_perp ? kappa_perp*denf
+                            *std::sqrt(std::max(grad2 - b_dot_gradT*b_dot_gradT, 0.0))
+                            : 0.0;
+        const int iup = (para_flux + perp_flux > 0.0) ? i-1 : i;  // hot side
+        const Real ciso2 = p(IPR,k,j,iup)/p(IDN,k,j,iup);
+        const Real qsat = 1.5*p(IDN,k,j,iup)*ciso2*std::sqrt(ciso2);
+        const Real f_sat = qsat/(qsat + std::sqrt(q_para*q_para + q_perp*q_perp));
+        para_flux *= f_sat;
+        perp_flux *= f_sat;
       }
-
       if (use_wedge) {
         kappa_wedge = 0.5*(kappa(DiffProcess::kappa_wedge,k,j,i)
                       + kappa(DiffProcess::kappa_wedge,k,j,i-1));
@@ -267,6 +339,36 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
         dTdz=0;
       }
 
+      // SH1: eq:17 & 18 limited transverse gradients for para/perp
+      dTdx_t = dTdx; dTdz_t = dTdz;
+        // limited dT/dx
+      dTdx_t = ConductionLimiters::LimitedTransverse(
+          ( (p(IPR,k,j,i+1)/p(IDN,k,j,i+1)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+          /pco_->dx1v(i),
+
+          ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) )
+          /pco_->dx1v(i-1),
+
+          ( (p(IPR,k,j-1,i+1)/p(IDN,k,j-1,i+1)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
+          /pco_->dx1v(i),
+
+          ( (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) - (p(IPR,k,j-1,i-1)/p(IDN,k,j-1,i-1)) )
+          /pco_->dx1v(i-1));
+      if (f3) { // limited dT/dz
+        dTdz_t = ConductionLimiters::LimitedTransverse(
+            ( (p(IPR,k+1,j,i)/p(IDN,k+1,j,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+            /(pco_->dx3v(k)*pco_->h31v(i)*pco_->h32f(j)),
+
+            ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
+            /(pco_->dx3v(k-1)*pco_->h31v(i)*pco_->h32f(j)),
+
+            ( (p(IPR,k+1,j-1,i)/p(IDN,k+1,j-1,i)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
+            /(pco_->dx3v(k)*pco_->h31v(i)*pco_->h32f(j)),
+
+            ( (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) - (p(IPR,k-1,j-1,i)/p(IDN,k-1,j-1,i)) )
+            /(pco_->dx3v(k-1)*pco_->h31v(i)*pco_->h32f(j)));
+      }
+
       Bx = 0.5*(pmb_->pfield->bcc(IB1, k,j,i) + pmb_->pfield->bcc(IB1, k,j-1,i));
       By =  pmb_->pfield->b.x2f(k,j,i);
       Bz = 0.5*(pmb_->pfield->bcc(IB3, k,j,i) + pmb_->pfield->bcc(IB3, k,j-1,i));
@@ -274,7 +376,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
 
       if (B > TINY_NUMBER) {
         bx = Bx/B; by = By/B; bz = Bz/B;
-        b_dot_gradT = bx*dTdx + by*dTdy + bz*dTdz;
+        b_dot_gradT = bx*dTdx_t + by*dTdy + bz*dTdz_t;
       } else {
         bx = 0.0; by = 0.0; bz = 0.0; b_dot_gradT = 0.0;
       }
@@ -288,7 +390,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
         iso_flux = -(1-HII)*(kappa_neutral*denf*dTdy);
       }
 
-        // Braginskii page 249 equtation 4.33 - y direction
+        // BS1: p:249 eq:4.33 - y direction
         if (use_para) {
         kappa_para = 0.5*(kappa(DiffProcess::kappa_para,k,j,i)
                      + kappa(DiffProcess::kappa_para,k,j-1,i));
@@ -298,6 +400,19 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
           kappa_perp = 0.5*(kappa(DiffProcess::kappa_perp,k,j,i)
                       + kappa(DiffProcess::kappa_perp,k,j-1,i));
           perp_flux = -(HII*kappa_perp*denf*(dTdy-by*b_dot_gradT));
+        }  // saturate the total ion flux MG1: A.3
+        if (use_sat && (use_para || use_perp)) {
+          const Real grad2 = dTdx_t*dTdx_t + dTdy*dTdy + dTdz_t*dTdz_t;
+          const Real q_para = use_para ? kappa_para*denf*std::abs(b_dot_gradT) : 0.0;
+          const Real q_perp = use_perp ? kappa_perp*denf
+                              *std::sqrt(std::max(grad2 - b_dot_gradT*b_dot_gradT, 0.0))
+                              : 0.0;
+          const int jup = (para_flux + perp_flux > 0.0) ? j-1 : j;  // hot side
+          const Real ciso2 = p(IPR,k,jup,i)/p(IDN,k,jup,i);
+          const Real qsat = 1.5*p(IDN,k,jup,i)*ciso2*std::sqrt(ciso2);
+          const Real f_sat = qsat/(qsat + std::sqrt(q_para*q_para + q_perp*q_perp));
+          para_flux *= f_sat;
+          perp_flux *= f_sat;
         }
         if (use_wedge) {
           kappa_wedge = 0.5*(kappa(DiffProcess::kappa_wedge,k,j,i)
@@ -355,6 +470,35 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
         dTdz = (p(IPR,k,j,i)/p(IDN,k,j,i) - p(IPR,k-1,j,i)/p(IDN,k-1,j,i))
               /(pco_->dx3v(k-1) * pco_->h31v(i) * pco_->h32v(j));
 
+         // SH1: eq:17 & 18 limited transverse gradients for para/perp
+         dTdx_t = dTdx; dTdy_t = dTdy;
+         dTdx_t = ConductionLimiters::LimitedTransverse( // limited dT/dx
+            ( (p(IPR,k,j,i+1)/p(IDN,k,j,i+1)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+            /pco_->dx1v(i),
+
+            ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j,i-1)/p(IDN,k,j,i-1)) )
+            /pco_->dx1v(i-1),
+
+            ( (p(IPR,k-1,j,i+1)/p(IDN,k-1,j,i+1)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
+            /pco_->dx1v(i),
+
+            ( (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) - (p(IPR,k-1,j,i-1)/p(IDN,k-1,j,i-1)) )
+            /pco_->dx1v(i-1));
+         if (f2) { // limited dT/dy
+          dTdy_t = ConductionLimiters::LimitedTransverse(
+              ( (p(IPR,k,j+1,i)/p(IDN,k,j+1,i)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
+              /(pco_->h2v(i)*pco_->dx2v(j)),
+
+              ( (p(IPR,k,j,i)/p(IDN,k,j,i)) - (p(IPR,k,j-1,i)/p(IDN,k,j-1,i)) )
+              /(pco_->h2v(i)*pco_->dx2v(j-1)),
+
+              ( (p(IPR,k-1,j+1,i)/p(IDN,k-1,j+1,i)) - (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) )
+              /(pco_->h2v(i)*pco_->dx2v(j)),
+
+              ( (p(IPR,k-1,j,i)/p(IDN,k-1,j,i)) - (p(IPR,k-1,j-1,i)/p(IDN,k-1,j-1,i)) )
+              /(pco_->h2v(i)*pco_->dx2v(j-1)));
+        }
+
         Bx = 0.5*(pmb_->pfield->bcc(IB1, k,j,i) + pmb_->pfield->bcc(IB1, k-1,j,i));
         By = 0.5*(pmb_->pfield->bcc(IB2, k,j,i) + pmb_->pfield->bcc(IB2, k-1,j,i));
         Bz = pmb_->pfield->b.x3f(k,j,i);
@@ -362,7 +506,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
 
         if (B > TINY_NUMBER) {
           bx = Bx/B; by = By/B; bz = Bz/B;
-          b_dot_gradT = bx*dTdx + by*dTdy + bz*dTdz;
+          b_dot_gradT = bx*dTdx_t + by*dTdy_t + bz*dTdz;
         } else {
           bx = 0.0; by = 0.0; bz = 0.0; b_dot_gradT = 0.0;
         }
@@ -376,7 +520,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
           iso_flux = -(1-HII)*(kappa_neutral*denf*dTdz);
         }
 
-        // Braginskii page 249 equtation 4.33 - z direction
+        // BS1: p:249 eq:4.33 - z direction
         if (use_para) {
           kappa_para = 0.5*(kappa(DiffProcess::kappa_para,k,j,i)
                         + kappa(DiffProcess::kappa_para,k-1,j,i));
@@ -386,8 +530,20 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
           kappa_perp = 0.5*(kappa(DiffProcess::kappa_perp,k,j,i)
                       + kappa(DiffProcess::kappa_perp,k-1,j,i));
           perp_flux = -(HII*kappa_perp*denf*(dTdz-bz*b_dot_gradT));
+        }  // saturate the total ion flux (Mignone+12 A3)
+        if (use_sat && (use_para || use_perp)) {
+          const Real grad2 = dTdx_t*dTdx_t + dTdy_t*dTdy_t + dTdz*dTdz;
+          const Real q_para = use_para ? kappa_para*denf*std::abs(b_dot_gradT) : 0.0;
+          const Real q_perp = use_perp ? kappa_perp*denf
+                              *std::sqrt(std::max(grad2 - b_dot_gradT*b_dot_gradT, 0.0))
+                              : 0.0;
+          const int kup = (para_flux + perp_flux > 0.0) ? k-1 : k;  // hot side
+          const Real ciso2 = p(IPR,kup,j,i)/p(IDN,kup,j,i);
+          const Real qsat = 1.5*p(IDN,kup,j,i)*ciso2*std::sqrt(ciso2);
+          const Real f_sat = qsat/(qsat + std::sqrt(q_para*q_para + q_perp*q_perp));
+          para_flux *= f_sat;
+          perp_flux *= f_sat;
         }
-
         if (use_wedge) {
           kappa_wedge = 0.5*(kappa(DiffProcess::kappa_wedge,k,j,i)
                         + kappa(DiffProcess::kappa_wedge,k-1,j,i));

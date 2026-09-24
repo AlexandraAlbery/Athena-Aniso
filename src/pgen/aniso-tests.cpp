@@ -102,7 +102,9 @@ void CalculateMagDiff(FieldDiffusion *pfdif, MeshBlock *pmb,
     int is, int ie, int js, int je, int ks, int ke);
 void CalculateWellPosedness(MeshBlock *pmb);
 Real TETimeStep(MeshBlock *pmb);
-Real TemperatureIntrgral(MeshBlock *pmb, int iout);
+Real TemperatureL1(MeshBlock *pmb, int iout);
+Real TemperatureL2(MeshBlock *pmb, int iout);
+Real TemperatureLInf(MeshBlock *pmb, int iout);
 Real VelocityIntegral(MeshBlock *pmb, int iout);
 Real FieldIntegral(MeshBlock *pmb, int iout);
 
@@ -177,10 +179,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
     //EnrollFieldDiffusivity(CalculateMagDiff);
     //EnrollUserTimeStepFunction(TETimeStep);
 
-    AllocateUserHistoryOutput(3);
-    EnrollUserHistoryOutput(0, TemperatureIntrgral, "Temp_int");
-    EnrollUserHistoryOutput(1, VelocityIntegral, "vel_int");
-    EnrollUserHistoryOutput(2, FieldIntegral, "B_int");
+    AllocateUserHistoryOutput(5);
+    EnrollUserHistoryOutput(0, TemperatureL1, "Temp_L1");
+    EnrollUserHistoryOutput(1, TemperatureL2, "Temp_L2");
+    EnrollUserHistoryOutput(2, TemperatureLInf, "Temp_LInf");
+    EnrollUserHistoryOutput(3, VelocityIntegral, "vel_int");
+    EnrollUserHistoryOutput(4, FieldIntegral, "B_int");
 
     return;
 }
@@ -1222,8 +1226,8 @@ Real TETimeStep(MeshBlock *pmb){
     return 1e-4;
 }
 
-// Calculates the temperature integral (T-T0)^2 dV for TE convergence test
-Real TemperatureIntrgral(MeshBlock *pmb, int iout) {
+// Calculates the L1 temperature error int|T_sim-T_ana| dV for convergence tests
+Real TemperatureL1(MeshBlock *pmb, int iout) {
 
     int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
     int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
@@ -1231,16 +1235,66 @@ Real TemperatureIntrgral(MeshBlock *pmb, int iout) {
     Real T_sim = 0;
     Real T_ana = 0;
     Real t = 0;
-    AthenaArray<Real> &T0 = pmb->ruser_meshblock_data[0];
+    Real T_0 = P_0/rho_0;
     Real dV = 0;
     for (int k = ks; k <= ke; k++) {
         for (int j = js; j <= je; j++) {
             for (int i = is; i <= ie; i++) {
                 dV = pmb->pcoord->GetCellVolume(k,j,i);
                 T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
-                T_ana = T0(k,j,i)*(1.0+std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
+                T_ana = T_0*(1.0+A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
+                                *std::cos(kx*pmb->pcoord->x1v(i)));
+                T_int += std::abs(T_sim-T_ana)*dV;
+            }
+        }
+    }
+    return T_int;
+}
+
+// Calculates the L2 temperature error int(T_sim-T_ana)^2 dV for convergence tests
+Real TemperatureL2(MeshBlock *pmb, int iout) {
+
+    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+    Real T_int = 0;
+    Real T_sim = 0;
+    Real T_ana = 0;
+    Real t = 0;
+    Real T_0 = P_0/rho_0;
+    Real dV = 0;
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                dV = pmb->pcoord->GetCellVolume(k,j,i);
+                T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
+                T_ana = T_0*(1.0+A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
                                 *std::cos(kx*pmb->pcoord->x1v(i)));
                 T_int += (T_sim-T_ana)*(T_sim-T_ana)*dV;
+            }
+        }
+    }
+    return T_int;
+}
+
+// Calculates the L_inf temperature error max|T_sim-T_ana| dV for convergence tests
+Real TemperatureLInf(MeshBlock *pmb, int iout) {
+
+    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+    Real T_int = 0;
+    Real T_sim = 0;
+    Real T_ana = 0;
+    Real t = 0;
+    Real T_0 = P_0/rho_0;
+    Real dV = 0;
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                dV = pmb->pcoord->GetCellVolume(k,j,i);
+                T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
+                T_ana = T_0*(1.0+A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
+                                *std::cos(kx*pmb->pcoord->x1v(i)));
+                T_int = std::max(std::abs(T_sim-T_ana),T_int)*dV;
             }
         }
     }
