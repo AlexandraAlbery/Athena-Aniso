@@ -873,7 +873,7 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
 
           // ion fraction weighting
           if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0
-              || pmb->phydro->hdif.nu_aniso_neutral) {
+              || pmb->phydro->hdif.nu_aniso_neutral > 0.0) {
             ion_frac = 0.5*(pmb->phydro->hdif.ion_frac(k,j,i)
                        + pmb->phydro->hdif.ion_frac(k,j,i-1));
             qJx_para *= ion_frac; qJx_perp *= ion_frac; qJx_wedge *= ion_frac;
@@ -932,7 +932,7 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
 
           // ion fraction weighting
           if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0
-              || pmb->phydro->hdif.nu_aniso_neutral) {
+              || pmb->phydro->hdif.nu_aniso_neutral > 0.0) {
             ion_frac = 0.5*(pmb->phydro->hdif.ion_frac(k,j,i)
                        + pmb->phydro->hdif.ion_frac(k,j-1,i));
             qJy_para *= ion_frac; qJy_perp *= ion_frac; qJy_wedge *= ion_frac;
@@ -991,7 +991,7 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
 
           // ion fraction weighting
           if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0
-              || pmb->phydro->hdif.nu_aniso_neutral) {
+              || pmb->phydro->hdif.nu_aniso_neutral > 0.0) {
             ion_frac = 0.5*(pmb->phydro->hdif.ion_frac(k,j,i)
                        + pmb->phydro->hdif.ion_frac(k-1,j,i));
             qJz_para *= ion_frac; qJz_perp *= ion_frac; qJz_wedge *= ion_frac;
@@ -1091,7 +1091,8 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
           FTz_perp = -(1.0/Tedge)*(therm_perp*gTpz);
           FTz_wedge = -(1.0/Tedge)*(therm_wedge*bcTz);
 
-          if(pmb->phydro->hdif.kappa_aniso_neutral > 0.0) {
+          if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0
+            || pmb->phydro->hdif.nu_aniso_neutral > 0.0) {
           ion_frac = 0.5*(pmb->phydro->hdif.ion_frac(ks,js,i)
                      + pmb->phydro->hdif.ion_frac(ks,js,i-1));
             FTy_para *= ion_frac; FTy_perp *= ion_frac; FTy_wedge *= ion_frac;
@@ -1161,7 +1162,8 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
         FTx_perp = -(1.0/Te1(ks,j,i))*(therm_perp*gTpx);
         FTx_wedge = -(1.0/Te1(ks,j,i))*(therm_wedge*bcTx);
 
-        if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0) {
+        if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0 ||
+            pmb->phydro->hdif.nu_aniso_neutral > 0.0) {
           ion_frac = 0.5*(pmb->phydro->hdif.ion_frac(ks,j-1,i)
                      + pmb->phydro->hdif.ion_frac(ks,j,i));
           FTx_para *= ion_frac; FTx_perp *= ion_frac; FTx_wedge *= ion_frac;
@@ -1220,7 +1222,8 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
         FTy_perp = -(1.0/Tedge)*(therm_perp*gTpy);
         FTy_wedge = -(1.0/Tedge)*(therm_wedge*bcTy);
 
-        if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0) {
+        if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0 ||
+            pmb->phydro->hdif.nu_aniso_neutral > 0.0) {
           ion_frac = 0.5*(pmb->phydro->hdif.ion_frac(ks,j,i-1)
                      + pmb->phydro->hdif.ion_frac(ks,j,i));
           FTy_para *= ion_frac; FTy_perp *= ion_frac; FTy_wedge *= ion_frac;
@@ -1286,7 +1289,8 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
         FTz_perp = -(1.0/Tedge)*(therm_perp*gTpz);
         FTz_wedge = -(1.0/Tedge)*(therm_wedge*bcTz);
 
-      if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0) {
+      if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0 ||
+          pmb->phydro->hdif.nu_aniso_neutral > 0.0) {
         ion_frac = 0.25*(pmb->phydro->hdif.ion_frac(ks,j,i)
                    + pmb->phydro->hdif.ion_frac(ks,j,i-1)
                    + pmb->phydro->hdif.ion_frac(ks,j-1,i)
