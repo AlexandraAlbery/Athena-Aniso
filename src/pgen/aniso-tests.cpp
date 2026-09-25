@@ -1242,8 +1242,12 @@ Real TemperatureL1(MeshBlock *pmb, int iout) {
             for (int i = is; i <= ie; i++) {
                 dV = pmb->pcoord->GetCellVolume(k,j,i);
                 T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
-                T_ana = T_0*(1.0+A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
-                                *std::cos(kx*pmb->pcoord->x1v(i)));
+
+                if(problem_ID == 0) {
+                    T_ana = T_0*(1.0
+                            +A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
+                            *std::cos(kx*pmb->pcoord->x1v(i)));
+                }
                 T_int += std::abs(T_sim-T_ana)*dV;
             }
         }
@@ -1267,9 +1271,12 @@ Real TemperatureL2(MeshBlock *pmb, int iout) {
             for (int i = is; i <= ie; i++) {
                 dV = pmb->pcoord->GetCellVolume(k,j,i);
                 T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
-                T_ana = T_0*(1.0+A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
-                                *std::cos(kx*pmb->pcoord->x1v(i)));
-                T_int += (T_sim-T_ana)*(T_sim-T_ana)*dV;
+                if(problem_ID == 0) {
+                    T_ana = T_0*(1.0
+                            +A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
+                            *std::cos(kx*pmb->pcoord->x1v(i)));
+                }
+                T_int += std::sqrt((T_sim-T_ana)*(T_sim-T_ana)*dV);
             }
         }
     }
@@ -1292,8 +1299,11 @@ Real TemperatureLInf(MeshBlock *pmb, int iout) {
             for (int i = is; i <= ie; i++) {
                 dV = pmb->pcoord->GetCellVolume(k,j,i);
                 T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
-                T_ana = T_0*(1.0+A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
-                                *std::cos(kx*pmb->pcoord->x1v(i)));
+                if(problem_ID == 0) {
+                    T_ana = T_0*(1.0
+                            +A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
+                            *std::cos(kx*pmb->pcoord->x1v(i)));
+                }
                 T_int = std::max(std::abs(T_sim-T_ana),T_int)*dV;
             }
         }
