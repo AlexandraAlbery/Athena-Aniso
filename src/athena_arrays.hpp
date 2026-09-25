@@ -16,9 +16,10 @@
 // C headers
 
 // C++ headers
-#include <cstddef>  // size_t
-#include <cstring>  // memset()
-#include <utility>  // swap()
+#include <algorithm>
+#include <cstddef>   // size_t
+#include <cstring>   // memset()
+#include <utility>   // swap()
 
 // Athena++ headers
 
@@ -82,6 +83,7 @@ class AthenaArray {
   // public function to exchange two arrays
   void ExchangeAthenaArray(AthenaArray<T>& array2);
   void ZeroClear();
+  void OneClear();
 
   // functions to get array dimensions
   int GetDim1() const { return nx1_; }
@@ -507,6 +509,23 @@ void AthenaArray<T>::ZeroClear() {
     case DataStatus::allocated:
       // allocate memory and initialize to zero
       std::memset(pdata_, 0, GetSizeInBytes());
+      break;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn AthenaArray::OneClear()
+//! \brief  fill the array with one
+
+template<typename T>
+void AthenaArray<T>::OneClear() {
+  switch (state_) {
+    case DataStatus::empty:
+      break;
+    case DataStatus::shallow_slice:
+    case DataStatus::allocated:
+      // allocate memory and initalize to one
+      std::fill(pdata_, pdata_ + GetSize(), static_cast<T>(1));
       break;
   }
 }

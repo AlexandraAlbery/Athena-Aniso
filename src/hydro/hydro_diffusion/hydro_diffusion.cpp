@@ -152,7 +152,16 @@ HydroDiffusion::HydroDiffusion(Hydro *phyd, ParameterInput *pin) :
         ion_frac_const = pin->GetOrAddReal("problem", "ion_frac_const", 0.0);}
       else
         CalcCondCoeff_ = pmb_->pmy_mesh->ConductionCoeff_;
+
+      if(limit_saturated_conduction) {
+        sat_x1.NewAthenaArray(nc1+1, nc2,   nc3);
+        sat_x2.NewAthenaArray(nc1,   nc2+1, nc3);
+        sat_x3.NewAthenaArray(nc1,   nc2,   nc3+1);
+        sat_x1.OneClear(); // Fill with ones for safety
+        sat_x2.OneClear();
+        sat_x3.OneClear();
       }
+    }
   }
 
   if(aniso_viscosity) {

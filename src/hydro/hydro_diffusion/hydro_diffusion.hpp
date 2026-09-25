@@ -74,10 +74,14 @@ class HydroDiffusion {
   // conduction
   Real kappa_iso, kappa_aniso_neutral, kappa_aniso_para,
   kappa_aniso_perp, kappa_aniso_wedge; // thermal conduction coeffs
-// Real kappa_aniso put this back if I break something
   AthenaArray<Real> cndflx[3]; // thermal stress tensor
-  AthenaArray<Real> cndflx_disp[3]; // Right-Leduc stress tensor
+  AthenaArray<Real> cndflx_disp[3]; // Righi-Leduc stress tensor
   AthenaArray<Real> kappa; // conduction array
+
+  // Saturated thermal conduction ratios at the face also limits Ettinghausen (qJ_wedge)
+  AthenaArray<Real> sat_x1;
+  AthenaArray<Real> sat_x2;
+  AthenaArray<Real> sat_x3;
 
   // state fractions
   AthenaArray<Real> ion_frac; // ionised fraction

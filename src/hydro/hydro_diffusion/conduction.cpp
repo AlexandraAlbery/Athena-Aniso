@@ -148,8 +148,18 @@ void HydroDiffusion::ThermalFluxIso(
 void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
                                       AthenaArray<Real> *flx,
                                       AthenaArray<Real> *flx_disp) {
+  using ConductionLimiters::LimitedTransverse;
+
   const bool f2 = pmb_->pmy_mesh->f2;
   const bool f3 = pmb_->pmy_mesh->f3;
+
+  const bool use_neutral = (HydroDiffusion::kappa_aniso_neutral > 0.0) && calc_para_;
+  const bool use_para    = (HydroDiffusion::kappa_aniso_para  > 0.0) && calc_para_;
+  const bool use_perp    = (HydroDiffusion::kappa_aniso_perp  > 0.0) && calc_para_;
+  const bool use_wedge   = (HydroDiffusion::kappa_aniso_wedge > 0.0) && calc_disp_;
+
+  const bool use_sat = HydroDiffusion::limit_saturated_conduction;
+  const bool lim_c = HydroDiffusion::flux_limit_conduction;
 
   AthenaArray<Real> &x1flux = flx[X1DIR];
   AthenaArray<Real> &x2flux = flx[X2DIR];
@@ -170,16 +180,6 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
   Real dTdx_t = 0.0; Real dTdy_t = 0.0; Real dTdz_t = 0.0; // Transverse gradients
   Real iso_flux = 0.0; Real para_flux = 0.0; Real perp_flux = 0.0; Real wedge_flux = 0.0;
   Real b_dot_gradT = 0.0;
-
-  const bool use_neutral = (HydroDiffusion::kappa_aniso_neutral > 0.0) && calc_para_;
-  const bool use_para    = (HydroDiffusion::kappa_aniso_para  > 0.0) && calc_para_;
-  const bool use_perp    = (HydroDiffusion::kappa_aniso_perp  > 0.0) && calc_para_;
-  const bool use_wedge   = (HydroDiffusion::kappa_aniso_wedge > 0.0) && calc_disp_;
-
-  const bool use_sat = HydroDiffusion::limit_saturated_conduction;
-  const bool lim_c = HydroDiffusion::flux_limit_conduction;
-
-  using ConductionLimiters::LimitedTransverse;
 
   // i-direction
   jl = js, ju = je, kl = ks, ku = ke;
@@ -290,9 +290,11 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
         const int iup = (para_flux + perp_flux > 0.0) ? i-1 : i;  // hot side
         const Real ciso2 = p(IPR,k,j,iup)/p(IDN,k,j,iup);
         const Real qsat = 1.5*p(IDN,k,j,iup)*ciso2*std::sqrt(ciso2);
-        const Real f_sat = qsat/(qsat + std::sqrt(q_para*q_para + q_perp*q_perp));
-        para_flux *= f_sat;
-        perp_flux *= f_sat;
+        const Real f_para = qsat/(qsat + q_para);
+        const Real f_perp = qsat/(qsat + q_perp);
+        para_flux *= f_para;
+        perp_flux *= f_perp;
+        sat_x1(k,j,i) = f_perp; // f_perp, reused by the Ettingshausen flux
       }
       if (use_wedge) {
         kappa_wedge = 0.5*(kappa(DiffProcess::kappa_wedge,k,j,i)
@@ -417,9 +419,11 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
           const int jup = (para_flux + perp_flux > 0.0) ? j-1 : j;  // hot side
           const Real ciso2 = p(IPR,k,jup,i)/p(IDN,k,jup,i);
           const Real qsat = 1.5*p(IDN,k,jup,i)*ciso2*std::sqrt(ciso2);
-          const Real f_sat = qsat/(qsat + std::sqrt(q_para*q_para + q_perp*q_perp));
-          para_flux *= f_sat;
-          perp_flux *= f_sat;
+          const Real f_para = qsat/(qsat + q_para);
+          const Real f_perp = qsat/(qsat + q_perp);
+          para_flux *= f_para;
+          perp_flux *= f_perp;
+          sat_x2(k,j,i) = f_perp; // f_perp, reused by the Ettingshausen flux
         }
         if (use_wedge) {
           kappa_wedge = 0.5*(kappa(DiffProcess::kappa_wedge,k,j,i)
@@ -549,9 +553,11 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
           const int kup = (para_flux + perp_flux > 0.0) ? k-1 : k;  // hot side
           const Real ciso2 = p(IPR,kup,j,i)/p(IDN,kup,j,i);
           const Real qsat = 1.5*p(IDN,kup,j,i)*ciso2*std::sqrt(ciso2);
-          const Real f_sat = qsat/(qsat + std::sqrt(q_para*q_para + q_perp*q_perp));
-          para_flux *= f_sat;
-          perp_flux *= f_sat;
+          const Real f_para = qsat/(qsat + q_para);
+          const Real f_perp = qsat/(qsat + q_perp);
+          para_flux *= f_para;
+          perp_flux *= f_perp;
+          sat_x3(k,j,i) = f_perp; // f_perp, reused by the Ettingshausen flux
         }
         if (use_wedge) {
           kappa_wedge = 0.5*(kappa(DiffProcess::kappa_wedge,k,j,i)

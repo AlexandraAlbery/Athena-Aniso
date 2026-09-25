@@ -115,6 +115,9 @@ class FieldDiffusion {
   void ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
                           const AthenaArray<Real> &bc,
                           EdgeField &e_para, EdgeField &e_disp);
+  // Saturation limiter for Nernst (FTw) as cell edges
+  Real GetqPerpSat(MeshBlock *pmb, int kl, int ku, int jl, int ju, int il, int iu,
+                  Real grad2, Real b_dot_grad_T_);
 
   // functions for energy flux
   void PoyntingFlux(EdgeField &e, const AthenaArray<Real> &bc, FaceField &p_des);

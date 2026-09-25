@@ -797,7 +797,7 @@ void FieldDiffusion::HallEMF(const FaceField &b, const AthenaArray<Real> &bc,
 //  RF1: https://farside.ph.utexas.edu/teaching/plasma/Plasma/node53.html
 //  The energy flux terms qJx, qJy, qJz solve SB1 eqn(4.32) (page 249).
 //  Also see last two terms of RF1 eqn.(4.120)
-//    (perpendicular is omitted in strongly magnetised limit)
+//  (perpendicular is omitted in strongly magnetised limit)
 
 void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b,
                                               const AthenaArray<Real> &bc,
@@ -823,6 +823,11 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
   Real qJx_para = 0.0; Real qJx_perp = 0.0; Real qJx_wedge = 0.0;
   Real qJy_para = 0.0; Real qJy_perp = 0.0; Real qJy_wedge = 0.0;
   Real qJz_para = 0.0; Real qJz_perp = 0.0; Real qJz_wedge = 0.0;
+
+  const bool use_sat = pmb->phydro->hdif.limit_saturated_conduction;
+  AthenaArray<Real> &sat_x1_ = pmb->phydro->hdif.sat_x1;
+  AthenaArray<Real> &sat_x2_ = pmb->phydro->hdif.sat_x2;
+  AthenaArray<Real> &sat_x3_ = pmb->phydro->hdif.sat_x3;
 
   // x face thermoelectric conduction
   for (int k=ks; k<=ke; ++k) {
@@ -878,9 +883,16 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
                        + pmb->phydro->hdif.ion_frac(k,j,i-1));
             qJx_para *= ion_frac; qJx_perp *= ion_frac; qJx_wedge *= ion_frac;
           }
-            x1flux(k,j,i) += qJx_wedge;
-            x1flux_disp(k,j,i) += qJx_para + qJx_perp;
-            if(!STS_ENABLED) x1flux(k,j,i) += qJx_para + qJx_perp;
+
+          // Saturation limiting, sat_nernst = sat_cond_perp
+          // J P Brodrick et al 2018 Plasma Phys. Control. Fusion 60 084009
+          if (use_sat) {
+            qJx_wedge *= sat_x1_(k,j,i);
+          }
+
+          x1flux(k,j,i) += qJx_wedge;
+          x1flux_disp(k,j,i) += qJx_para + qJx_perp;
+          if(!STS_ENABLED) x1flux(k,j,i) += qJx_para + qJx_perp;
       } // i loop
     } // j loop
   } // k loop
@@ -937,6 +949,13 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
                        + pmb->phydro->hdif.ion_frac(k,j-1,i));
             qJy_para *= ion_frac; qJy_perp *= ion_frac; qJy_wedge *= ion_frac;
           }
+
+          // Saturation limiting, sat_nernst = sat_cond_perp
+          // J P Brodrick et al 2018 Plasma Phys. Control. Fusion 60 084009
+          if (use_sat) {
+            qJy_wedge *= sat_x2_(k,j,i);
+          }
+
           x2flux(k,j,i) += qJy_wedge;
           x2flux_disp(k,j,i) += qJy_para + qJy_perp;
           if(!STS_ENABLED) x2flux(k,j,i) += qJy_para + qJy_perp;
@@ -996,6 +1015,12 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
                        + pmb->phydro->hdif.ion_frac(k-1,j,i));
             qJz_para *= ion_frac; qJz_perp *= ion_frac; qJz_wedge *= ion_frac;
           }
+          // Saturation limiting, sat_nernst = sat_cond_perp
+          // J P Brodrick et al 2018 Plasma Phys. Control. Fusion 60 084009
+          if (use_sat) {
+            qJz_wedge *= sat_x3_(k,j,i);
+          }
+
           x3flux(k,j,i) += qJz_wedge;
           x3flux_disp(k,j,i) += qJz_para + qJz_perp;
           if(!STS_ENABLED) x3flux(k,j,i) += qJz_para + qJz_perp;
@@ -1038,81 +1063,88 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
   Real FTx_perp = 0.0; Real FTy_perp = 0.0; Real FTz_perp = 0.0;
   Real FTx_wedge = 0.0; Real FTy_wedge = 0.0; Real FTz_wedge = 0.0;
 
+  const bool use_sat = pmb->phydro->hdif.limit_saturated_conduction;
+
   if (!f2) { // 1D update:
-        for (int i=is; i<=ie+1; ++i) {
-          // emf.x
-          therm_para =0.0; therm_perp =0.0; therm_wedge = 0.0;
-          FTy_para = FTy_perp = FTy_wedge = 0.0;
-          FTz_para = FTz_perp = FTz_wedge = 0.0;
-          Bx = b.x1f(ks,js,i);
-          By = 0.5*(b.x2f(ks,js,i) + b.x2f(ks,js,i-1));
-          Bz = 0.5*(b.x3f(ks,js,i) + b.x3f(ks,js,i-1));
-          B = std::sqrt(Bx*Bx + By*By + Bz*Bz);
+    for (int i=is; i<=ie+1; ++i) {
+      // emf.x
+      therm_para =0.0; therm_perp =0.0; therm_wedge = 0.0;
+      FTy_para = FTy_perp = FTy_wedge = 0.0;
+      FTz_para = FTz_perp = FTz_wedge = 0.0;
+      Bx = b.x1f(ks,js,i);
+      By = 0.5*(b.x2f(ks,js,i) + b.x2f(ks,js,i-1));
+      Bz = 0.5*(b.x3f(ks,js,i) + b.x3f(ks,js,i-1));
+      B = std::sqrt(Bx*Bx + By*By + Bz*Bz);
 
-          if (B > TINY_NUMBER) {
-            bx = Bx/B; by = By/B; bz = Bz/B;
-          } else {
-            bx = 0.0; by = 0.0; bz = 0.0;
-          }
+      if (B > TINY_NUMBER) {
+        bx = Bx/B; by = By/B; bz = Bz/B;
+      } else {
+        bx = 0.0; by = 0.0; bz = 0.0;
+      }
 
-          if (use_TE_para) {
-            therm_para = 0.5*(thermKappa(ThermElecProcess::kappa_TE_para,ks,js,i-1)
-                          + thermKappa(ThermElecProcess::kappa_TE_para,ks,js,i));}
-          if (use_TE_perp) {
-            therm_perp = 0.5*(thermKappa(ThermElecProcess::kappa_TE_perp,ks,js,i-1)
-                         + thermKappa(ThermElecProcess::kappa_TE_perp,ks,js,i));}
-          if (use_TE_wedge) {
-            therm_wedge = 0.5*(thermKappa(ThermElecProcess::kappa_TE_wedge,ks,js,i-1)
-                          + thermKappa(ThermElecProcess::kappa_TE_wedge,ks,js,i));}
+      if (use_TE_para) {
+        therm_para = 0.5*(thermKappa(ThermElecProcess::kappa_TE_para,ks,js,i-1)
+                      + thermKappa(ThermElecProcess::kappa_TE_para,ks,js,i));}
+      if (use_TE_perp) {
+        therm_perp = 0.5*(thermKappa(ThermElecProcess::kappa_TE_perp,ks,js,i-1)
+                      + thermKappa(ThermElecProcess::kappa_TE_perp,ks,js,i));}
+      if (use_TE_wedge) {
+        therm_wedge = 0.5*(thermKappa(ThermElecProcess::kappa_TE_wedge,ks,js,i-1)
+                      + thermKappa(ThermElecProcess::kappa_TE_wedge,ks,js,i));}
 
-          Tedge = Te2(ks,js,i); // Te2 and Te3 are equal in 1D
+      Tedge = Te2(ks,js,i); // Te2 and Te3 are equal in 1D
 
-          // dT/dx at x edge
-          dTdx = (Tcc(ks,js,i) -Tcc(ks,js,i-1))
-                  /pco_->dx1v(i-1);
+      // dT/dx at x edge
+      dTdx = (Tcc(ks,js,i) -Tcc(ks,js,i-1))
+              /pco_->dx1v(i-1);
 
-          // para = bdot_gradT
-          b_dot_gradT = bx*dTdx;
+      // para = bdot_gradT
+      b_dot_gradT = bx*dTdx;
 
-            // Perp = gradT_perp = gradT - b(b dot gradT)
-          Real gTpy = -by*b_dot_gradT;
-          Real gTpz = - bz*b_dot_gradT;
+        // Perp = gradT_perp = gradT - b(b dot gradT)
+      Real gTpy = -by*b_dot_gradT;
+      Real gTpz = - bz*b_dot_gradT;
 
-            // Wedge =  b x gradT
-          Real bcTy = bz*dTdx;
-          Real bcTz = -by*dTdx;
+        // Wedge =  b x gradT
+      Real bcTy = bz*dTdx;
+      Real bcTz = -by*dTdx;
 
-          // THERMOELECTRIC FORCE F_T
-          FTy_para = -(1.0/Tedge)*(therm_para*by*b_dot_gradT);
-          FTy_perp = -(1.0/Tedge)*(therm_perp*gTpy);
-          FTy_wedge = -(1.0/Tedge)*(therm_wedge*bcTy);
+      // THERMOELECTRIC FORCE F_T
+      FTy_para = -(1.0/Tedge)*(therm_para*by*b_dot_gradT);
+      FTy_perp = -(1.0/Tedge)*(therm_perp*gTpy);
+      FTy_wedge = -(1.0/Tedge)*(therm_wedge*bcTy);
 
-          FTz_para = -(1.0/Tedge)*(therm_para*bz*b_dot_gradT);
-          FTz_perp = -(1.0/Tedge)*(therm_perp*gTpz);
-          FTz_wedge = -(1.0/Tedge)*(therm_wedge*bcTz);
+      FTz_para = -(1.0/Tedge)*(therm_para*bz*b_dot_gradT);
+      FTz_perp = -(1.0/Tedge)*(therm_perp*gTpz);
+      FTz_wedge = -(1.0/Tedge)*(therm_wedge*bcTz);
 
-          if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0
-            || pmb->phydro->hdif.nu_aniso_neutral > 0.0) {
-          ion_frac = 0.5*(pmb->phydro->hdif.ion_frac(ks,js,i)
-                     + pmb->phydro->hdif.ion_frac(ks,js,i-1));
-            FTy_para *= ion_frac; FTy_perp *= ion_frac; FTy_wedge *= ion_frac;
-            FTz_para *= ion_frac; FTz_perp *= ion_frac; FTz_wedge *= ion_frac;
-        }
+      if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0
+        || pmb->phydro->hdif.nu_aniso_neutral > 0.0) {
+      ion_frac = 0.5*(pmb->phydro->hdif.ion_frac(ks,js,i)
+                  + pmb->phydro->hdif.ion_frac(ks,js,i-1));
+        FTy_para *= ion_frac; FTy_perp *= ion_frac; FTy_wedge *= ion_frac;
+        FTz_para *= ion_frac; FTz_perp *= ion_frac; FTz_wedge *= ion_frac;
+      }
 
-          // Update emfs
-          e2_diff(ks,js,  i) += FTy_wedge;
-          e2_diff(ke+1,js,i)  = e2_diff(ks,js,i);
-          e2_disp(ks,js,  i) += FTy_para + FTy_perp;
-          e2_disp(ke+1,js,i)  = e2_disp(ks,js,i);
+      if (use_sat) { // Saturation limit
+        const Real fp = GetqPerpSat(pmb, ks, ks, js, js, i-1, i, SQR(dTdx), b_dot_gradT);
+        FTy_wedge *= fp; FTz_wedge *= fp;
+      }
 
-          e3_diff(ks,js,  i) += FTz_wedge;
-          e3_diff(ks,je+1,i)  = e3_diff(ks,js,i);
-          e3_disp(ks,js,  i) += FTz_para + FTz_perp;
-          e3_disp(ks,je+1,i)  = e3_disp(ks,js,i);
-        } // i loop
+      // Update emfs
+      e2_diff(ks,js,  i) += FTy_wedge;
+      e2_diff(ke+1,js,i)  = e2_diff(ks,js,i);
+      e2_disp(ks,js,  i) += FTy_para + FTy_perp;
+      e2_disp(ke+1,js,i)  = e2_disp(ks,js,i);
+
+      e3_diff(ks,js,  i) += FTz_wedge;
+      e3_diff(ks,je+1,i)  = e3_diff(ks,js,i);
+      e3_disp(ks,js,  i) += FTz_para + FTz_perp;
+      e3_disp(ks,je+1,i)  = e3_disp(ks,js,i);
+    } // i loop
   } else  if (!f3) {// 2D update:
     for (int j=js; j<=je+1; ++j) {
-  #pragma omp simd
+    #pragma omp simd
       for (int i=is; i<=ie+1; ++i) {
         // emf.x
         therm_para = 0.0; therm_perp = 0.0; therm_wedge = 0.0;
@@ -1167,6 +1199,12 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
           ion_frac = 0.5*(pmb->phydro->hdif.ion_frac(ks,j-1,i)
                      + pmb->phydro->hdif.ion_frac(ks,j,i));
           FTx_para *= ion_frac; FTx_perp *= ion_frac; FTx_wedge *= ion_frac;
+        }
+
+        if (use_sat) { // Saturation limit
+        const Real fp = GetqPerpSat(pmb, ks, ks, j-1, j, i, i, SQR(dTdx) + SQR(dTdy),
+                                    b_dot_gradT);
+        FTx_wedge *= fp;
         }
 
         e1_diff(ks  ,j,i) += FTx_wedge;
@@ -1229,6 +1267,12 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
           FTy_para *= ion_frac; FTy_perp *= ion_frac; FTy_wedge *= ion_frac;
         }
 
+        if (use_sat) { // Saturation limit
+        const Real fp = GetqPerpSat(pmb, ks, ks, j, j, i-1, i, SQR(dTdx) + SQR(dTdy),
+                                    b_dot_gradT);
+        FTy_wedge *= fp;
+        }
+
         e2_diff(ks  ,j,i) += FTy_wedge;
         e2_diff(ke+1,j,i)  = e2_diff(ks,j,i);
         e2_disp(ks  ,j,i) += FTy_para + FTy_perp;
@@ -1289,14 +1333,20 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
         FTz_perp = -(1.0/Tedge)*(therm_perp*gTpz);
         FTz_wedge = -(1.0/Tedge)*(therm_wedge*bcTz);
 
-      if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0 ||
-          pmb->phydro->hdif.nu_aniso_neutral > 0.0) {
-        ion_frac = 0.25*(pmb->phydro->hdif.ion_frac(ks,j,i)
-                   + pmb->phydro->hdif.ion_frac(ks,j,i-1)
-                   + pmb->phydro->hdif.ion_frac(ks,j-1,i)
-                   + pmb->phydro->hdif.ion_frac(ks,j-1,i-1));
-        FTz_para *= ion_frac; FTz_perp *= ion_frac; FTz_wedge *= ion_frac;
-      }
+        if (pmb->phydro->hdif.kappa_aniso_neutral > 0.0 ||
+            pmb->phydro->hdif.nu_aniso_neutral > 0.0) {
+          ion_frac = 0.25*(pmb->phydro->hdif.ion_frac(ks,j,i)
+                    + pmb->phydro->hdif.ion_frac(ks,j,i-1)
+                    + pmb->phydro->hdif.ion_frac(ks,j-1,i)
+                    + pmb->phydro->hdif.ion_frac(ks,j-1,i-1));
+          FTz_para *= ion_frac; FTz_perp *= ion_frac; FTz_wedge *= ion_frac;
+        }
+
+        if (use_sat) { // Saturation limit
+        const Real fp = GetqPerpSat(pmb, ks, ks, j-1, j, i-1, i, SQR(dTdx) + SQR(dTdy),
+                                    b_dot_gradT);
+        FTz_wedge *= fp;
+        }
 
         e3_diff(ks,  j,i) += FTz_wedge;
         e3_diff(ke+1,j,i)  = e3_diff(ks,j,i);
@@ -1377,6 +1427,12 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
             FTx_para *= ion_frac; FTx_perp *= ion_frac; FTx_wedge *= ion_frac;
           }
 
+          if (use_sat) { // Saturation limit
+          const Real fp = GetqPerpSat(pmb, k-1, k, j-1, j, i, i,
+                                      SQR(dTdx) + SQR(dTdy) + SQR(dTdz), b_dot_gradT);
+          FTx_wedge *= fp;
+          }
+
           e1_diff(k,j,i) += FTx_wedge;
           e1_disp(k,j,i) += FTx_para + FTx_perp;
 
@@ -1447,7 +1503,13 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
                          + pmb->phydro->hdif.ion_frac(k,j,i-1)
                          + pmb->phydro->hdif.ion_frac(k-1,j,i-1));
               FTy_para *= ion_frac; FTy_perp *= ion_frac; FTy_wedge *= ion_frac;
-            }
+          }
+
+          if (use_sat) { // Saturation limit
+          const Real fp = GetqPerpSat(pmb, k-1, k, j, j, i-1, i,
+                                      SQR(dTdx) + SQR(dTdy) + SQR(dTdz), b_dot_gradT);
+          FTy_wedge *= fp;
+          }
 
           e2_diff(k,j,i) += FTy_wedge;
           e2_disp(k,j,i) += FTy_para + FTy_perp;
@@ -1520,6 +1582,13 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
                        + pmb->phydro->hdif.ion_frac(k,j-1,i-1));
             FTz_para *= ion_frac; FTz_perp *= ion_frac; FTz_wedge *= ion_frac;
           }
+
+          if (use_sat) { // Saturation limit
+          const Real fp = GetqPerpSat(pmb, k, k, j-1, j, i-1, i,
+                                      SQR(dTdx) + SQR(dTdy) + SQR(dTdz), b_dot_gradT);
+          FTz_wedge *= fp;
+          }
+
           e3_diff(k,j,i) += FTz_wedge;
           e3_disp(k,j,i) += FTz_para+FTz_perp;
         } // i loop
@@ -1592,4 +1661,32 @@ void FieldDiffusion::PoyntingFlux(EdgeField &e, const AthenaArray<Real> &bc,
     }
   }
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void FieldDiffusion::GetqPerpSat(...)
+//! \brief Saturated perpendicular thermal conduction at cell edges for Nernst (FTw)
+//  J P Brodrick et al 2018 Plasma Phys. Control. Fusion 60 084009
+Real GetqPerpSat(MeshBlock *pmb, int kl, int ku, int jl, int ju, int il, int iu,
+                 Real grad2, Real b_dot_grad_T_) {
+
+ HydroDiffusion &hdif = pmb->phydro->hdif;
+  AthenaArray<Real> &w = pmb->phydro->w;
+  Real rho = 0.0, P = 0.0, kperp = 0.0;
+  int n = 0;
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=il; i<=iu; ++i) {
+        rho   += w(IDN,k,j,i);
+        P   += w(IPR,k,j,i);
+        kperp += hdif.kappa(HydroDiffusion::DiffProcess::kappa_perp,k,j,i);
+        ++n;
+      }
+    }
+  }
+  rho /= n; P /= n; kperp /= n;
+  const Real q_perp = kperp*rho*std::sqrt(std::max(grad2 - SQR(b_dot_grad_T_), 0.0));
+  const Real ciso2 = P/rho;
+  const Real qsat = 1.5*rho*ciso2*std::sqrt(ciso2);
+  return qsat/(qsat + q_perp);
 }
