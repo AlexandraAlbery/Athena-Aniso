@@ -179,12 +179,16 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
     //EnrollFieldDiffusivity(CalculateMagDiff);
     //EnrollUserTimeStepFunction(TETimeStep);
 
-    AllocateUserHistoryOutput(5);
-    EnrollUserHistoryOutput(0, TemperatureL1, "Temp_L1");
-    EnrollUserHistoryOutput(1, TemperatureL2, "Temp_L2");
+    AllocateUserHistoryOutput(9);
+    EnrollUserHistoryOutput(0, TemperatureL1,   "Temp_L1");
+    EnrollUserHistoryOutput(1, TemperatureL2,   "Temp_L2");
     EnrollUserHistoryOutput(2, TemperatureLInf, "Temp_LInf");
-    EnrollUserHistoryOutput(3, VelocityIntegral, "vel_int");
-    EnrollUserHistoryOutput(4, FieldIntegral, "B_int");
+    EnrollUserHistoryOutput(3, VelocityL1,      "Vel_L1");
+    EnrollUserHistoryOutput(4, VelocityL2,      "Vel_L2");
+    EnrollUserHistoryOutput(5, VelocityInf,     "Vel_LInf");
+    EnrollUserHistoryOutput(6, FieldL1,         "Field_L1");
+    EnrollUserHistoryOutput(7, FieldL2,         "Field_L2");
+    EnrollUserHistoryOutput(8, FieldInf,        "Field_LInf");
 
     return;
 }
@@ -1276,10 +1280,11 @@ Real TemperatureL2(MeshBlock *pmb, int iout) {
                             +A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
                             *std::cos(kx*pmb->pcoord->x1v(i)));
                 }
-                T_int += std::sqrt((T_sim-T_ana)*(T_sim-T_ana)*dV);
+                T_int += (T_sim-T_ana)*(T_sim-T_ana)*dV;
             }
         }
     }
+    T_int = std::sqrt(T_int);
     return T_int;
 }
 
@@ -1311,24 +1316,178 @@ Real TemperatureLInf(MeshBlock *pmb, int iout) {
     return T_int;
 }
 
-Real VelocityIntegral(MeshBlock *pmb, int iout) {
-    Real v_int = 0.0;
-    AthenaArray<Real> &w = pmb->phydro->w;
-    for (int k = pmb->ks; k <= pmb->ke; k++)
-      for (int j = pmb->js; j <= pmb->je; j++)
-        for (int i = pmb->is; i <= pmb->ie; i++)
-          v_int += (SQR(w(IVX,k,j,i)) + SQR(w(IVY,k,j,i)) + SQR(w(IVZ,k,j,i)))
-               * pmb->pcoord->GetCellVolume(k,j,i);
-    return v_int;
-  }
+// Calculates the L1 field error sum|v_sim-v_ana| dV for convergence tests
+Real VelocityL1(MeshBlock *pmb, int iout) {
 
-  Real FieldIntegral(MeshBlock *pmb, int iout) {
-    Real B_int = 0.0;
-    AthenaArray<Real> &bcc = pmb->pfield->bcc;
-    for (int k = pmb->ks; k <= pmb->ke; k++)
-      for (int j = pmb->js; j <= pmb->je; j++)
-        for (int i = pmb->is; i <= pmb->ie; i++)
-          B_int += (SQR(bcc(IB1,k,j,i) - Bx_0) + SQR(bcc(IB2,k,j,i) - By_0)
-              + SQR(bcc(IB3,k,j,i) - Bz_0)) * pmb->pcoord->GetCellVolume(k,j,i);
+    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+    Real v_int = 0;
+    Real vx_sim = 0; Real vy_sim = 0; Real vz_sim = 0;
+    Real vx_ana = 0; Real vy_ana = 0; Real vz_ana = 0;
+    Real vx_e = 0; Real vy_e = 0; Real vz_e = 0;
+    Real dV = 0;
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                dV = pmb->pcoord->GetCellVolume(k,j,i);
+                vx_sim = pmb->phydro->w(IVX,k,j,i);
+                vy_sim = pmb->phydro->w(IVY,k,j,i);
+                vz_sim = pmb->phydro->w(IVZ,k,j,i);
+
+                vx_e = vx_sim - vx_ana;
+                vy_e = vy_sim - vy_ana;
+                vz_e = vz_sim - vz_ana;
+
+                v_int += std::sqrt(SQR(vx_e) + SQR(vy_e) + SQR(vz_e))*dV;
+            }
+        }
+    }
+    return v_int;
+}
+
+// Calculates the L2 velocity error sqrt(sum|v_sim-v_ana|^2 dV) for convergence tests
+Real VelocityL2(MeshBlock *pmb, int iout) {
+
+    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+    Real v_int = 0;
+    Real vx_sim = 0; Real vy_sim = 0; Real vz_sim = 0;
+    Real vx_ana = 0; Real vy_ana = 0; Real vz_ana = 0;
+    Real vx_e = 0; Real vy_e = 0; Real vz_e = 0;
+    Real dV = 0;
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                dV = pmb->pcoord->GetCellVolume(k,j,i);
+                vx_sim = pmb->phydro->w(IVX,k,j,i);
+                vy_sim = pmb->phydro->w(IVY,k,j,i);
+                vz_sim = pmb->phydro->w(IVZ,k,j,i);
+
+                vx_e = vx_sim - vx_ana;
+                vy_e = vy_sim - vy_ana;
+                vz_e = vz_sim - vz_ana;
+
+                v_int += SQR(vx_e) + SQR(vy_e) + SQR(vz_e)*dV;
+            }
+        }
+    }
+    v_int = std::sqrt(v_int);
+    return v_int;
+}
+
+// Calculates the L_Inf veolcity error max|v_sim-v_ana|dV for convergence tests
+Real VelocityInf(MeshBlock *pmb, int iout) {
+
+    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+    Real v_int = 0;
+    Real vx_sim = 0; Real vy_sim = 0; Real vz_sim = 0;
+    Real vx_ana = 0; Real vy_ana = 0; Real vz_ana = 0;
+    Real vx_e = 0; Real vy_e = 0; Real vz_e = 0;
+    Real dV = 0;
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                dV = pmb->pcoord->GetCellVolume(k,j,i);
+                vx_sim = pmb->phydro->w(IVX,k,j,i);
+                vy_sim = pmb->phydro->w(IVY,k,j,i);
+                vz_sim = pmb->phydro->w(IVZ,k,j,i);
+
+                vx_e = vx_sim - vx_ana;
+                vy_e = vy_sim - vy_ana;
+                vz_e = vz_sim - vz_ana;
+
+                v_int = std::max(std::sqrt(SQR(vx_e) + SQR(vy_e) + SQR(vz_e))*dV,v_int);
+            }
+        }
+    }
+    return v_int;
+}
+
+// Calculates the L1 field error sum|B_sim-B_ana| dV for convergence tests
+Real FieldL1(MeshBlock *pmb, int iout) {
+
+    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+    Real B_int = 0;
+    Real Bx_sim = 0; Real By_sim = 0; Real Bz_sim = 0;
+    Real Bx_ana = 0; Real By_ana = 0; Real Bz_ana = 0;
+    Real Bx_e = 0; Real By_e = 0; Real Bz_e = 0;
+    Real dV = 0;
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                dV = pmb->pcoord->GetCellVolume(k,j,i);
+                Bx_sim = pmb->pfield->bcc(IB1,k,j,i);
+                By_sim = pmb->pfield->bcc(IB2,k,j,i);
+                Bz_sim = pmb->pfield->bcc(IB3,k,j,i);
+
+                Bx_e = Bx_sim - Bx_ana;
+                By_e = By_sim - By_ana;
+                Bz_e = Bz_sim - Bz_ana;
+
+                B_int += std::sqrt(SQR(Bx_e) + SQR(By_e) + SQR(Bz_e))*dV;
+            }
+        }
+    }
     return B_int;
-  }
+}
+
+// Calculates the L2 field error sqrt(sum|B_sim-B_ana|^2 dV) for convergence tests
+Real FieldL2(MeshBlock *pmb, int iout) {
+
+    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+    Real B_int = 0;
+    Real Bx_sim = 0; Real By_sim = 0; Real Bz_sim = 0;
+    Real Bx_ana = 0; Real By_ana = 0; Real Bz_ana = 0;
+    Real Bx_e = 0; Real By_e = 0; Real Bz_e = 0;
+    Real dV = 0;
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                dV = pmb->pcoord->GetCellVolume(k,j,i);
+                Bx_sim = pmb->pfield->bcc(IB1,k,j,i);
+                By_sim = pmb->pfield->bcc(IB2,k,j,i);
+                Bz_sim = pmb->pfield->bcc(IB3,k,j,i);
+
+                Bx_e = Bx_sim - Bx_ana;
+                By_e = By_sim - By_ana;
+                Bz_e = Bz_sim - Bz_ana;
+
+                B_int += SQR(Bx_e) + SQR(By_e) + SQR(Bz_e)*dV;
+            }
+        }
+    }
+    B_int = std::sqrt(B_int);
+    return B_int;
+}
+
+// Calculates the L_Inf field error max|B_sim-B_ana|dV for convergence tests
+Real FieldInf(MeshBlock *pmb, int iout) {
+
+    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+    Real B_int = 0;
+    Real Bx_sim = 0; Real By_sim = 0; Real Bz_sim = 0;
+    Real Bx_ana = 0; Real By_ana = 0; Real Bz_ana = 0;
+    Real Bx_e = 0; Real By_e = 0; Real Bz_e = 0;
+    Real dV = 0;
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                dV = pmb->pcoord->GetCellVolume(k,j,i);
+                Bx_sim = pmb->pfield->bcc(IB1,k,j,i);
+                By_sim = pmb->pfield->bcc(IB2,k,j,i);
+                Bz_sim = pmb->pfield->bcc(IB3,k,j,i);
+
+                Bx_e = Bx_sim - Bx_ana;
+                By_e = By_sim - By_ana;
+                Bz_e = Bz_sim - Bz_ana;
+
+                B_int = std::max(std::sqrt(SQR(Bx_e) + SQR(By_e) + SQR(Bz_e))*dV,B_int);
+            }
+        }
+    }
+    return B_int;
+}
