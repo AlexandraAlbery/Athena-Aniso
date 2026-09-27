@@ -1241,16 +1241,29 @@ Real TemperatureL1(MeshBlock *pmb, int iout) {
     Real t = 0;
     Real T_0 = P_0/rho_0;
     Real dV = 0;
+    Real k2 = kx*kx + ky*ky + kz*kz;
+    Real B0 = std::sqrt(Bx_0*Bx_0 + By_0*By_0 + Bz_0*Bz_0);
+    HydroDiffusion &hdif_ = pmb->phydro->hdif;
+
     for (int k = ks; k <= ke; k++) {
         for (int j = js; j <= je; j++) {
             for (int i = is; i <= ie; i++) {
+                Real K_par = (B0 > 0.0) ? (kx*Bx_0 + ky*By_0 + kz*Bz_0)/B0 : 0.0;
+                Real HII = pmb->phydro->hdif.ion_frac(k,j,i);
+                Real kn = hdif_.kappa(hdif_.kappa_aniso_neutral,k,j,i);
+                Real kpa = hdif_.kappa(hdif_.kappa_aniso_para,k,j,i);
+                Real kpe = hdif_.kappa(hdif_.kappa_aniso_perp,k,j,i);
+                // effective diffusion
+                Real D = gm1*((1.0 - HII)*kn*k2
+                       + HII*(kpa*SQR(K_par) + kpe*(k2 - SQR(K_par))));
+
                 dV = pmb->pcoord->GetCellVolume(k,j,i);
                 T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
 
                 if(problem_ID == 0) {
-                    T_ana = T_0*(1.0
-                            +A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
-                            *std::cos(kx*pmb->pcoord->x1v(i)));
+                    T_ana = T_0*(1.0 + A_T*std::exp(-D*pmb->pmy_mesh->time)
+                               *std::cos(kx*pmb->pcoord->x1v(i) + ky*pmb->pcoord->x2v(j)
+                                         + kz*pmb->pcoord->x3v(k)));
                 }
                 T_int += std::abs(T_sim-T_ana)*dV;
             }
@@ -1270,15 +1283,29 @@ Real TemperatureL2(MeshBlock *pmb, int iout) {
     Real t = 0;
     Real T_0 = P_0/rho_0;
     Real dV = 0;
+    Real k2 = kx*kx + ky*ky + kz*kz;
+    Real B0 = std::sqrt(Bx_0*Bx_0 + By_0*By_0 + Bz_0*Bz_0);
+    HydroDiffusion &hdif_ = pmb->phydro->hdif;
+
     for (int k = ks; k <= ke; k++) {
         for (int j = js; j <= je; j++) {
             for (int i = is; i <= ie; i++) {
+                Real K_par = (B0 > 0.0) ? (kx*Bx_0 + ky*By_0 + kz*Bz_0)/B0 : 0.0;
+                Real HII = pmb->phydro->hdif.ion_frac(k,j,i);
+                Real kn = hdif_.kappa(hdif_.kappa_aniso_neutral,k,j,i);
+                Real kpa = hdif_.kappa(hdif_.kappa_aniso_para,k,j,i);
+                Real kpe = hdif_.kappa(hdif_.kappa_aniso_perp,k,j,i);
+                // effective diffusion
+                Real D = gm1*((1.0 - HII)*kn*k2
+                       + HII*(kpa*SQR(K_par) + kpe*(k2 - SQR(K_par))));
+
                 dV = pmb->pcoord->GetCellVolume(k,j,i);
                 T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
+
                 if(problem_ID == 0) {
-                    T_ana = T_0*(1.0
-                            +A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
-                            *std::cos(kx*pmb->pcoord->x1v(i)));
+                    T_ana = T_0*(1.0 + A_T*std::exp(-D*pmb->pmy_mesh->time)
+                               *std::cos(kx*pmb->pcoord->x1v(i) + ky*pmb->pcoord->x2v(j)
+                                         + kz*pmb->pcoord->x3v(k)));
                 }
                 T_int += (T_sim-T_ana)*(T_sim-T_ana)*dV;
             }
@@ -1299,15 +1326,29 @@ Real TemperatureLInf(MeshBlock *pmb, int iout) {
     Real t = 0;
     Real T_0 = P_0/rho_0;
     Real dV = 0;
+    Real k2 = kx*kx + ky*ky + kz*kz;
+    Real B0 = std::sqrt(Bx_0*Bx_0 + By_0*By_0 + Bz_0*Bz_0);
+    HydroDiffusion &hdif_ = pmb->phydro->hdif;
+
     for (int k = ks; k <= ke; k++) {
         for (int j = js; j <= je; j++) {
             for (int i = is; i <= ie; i++) {
+                Real K_par = (B0 > 0.0) ? (kx*Bx_0 + ky*By_0 + kz*Bz_0)/B0 : 0.0;
+                Real HII = pmb->phydro->hdif.ion_frac(k,j,i);
+                Real kn = hdif_.kappa(hdif_.kappa_aniso_neutral,k,j,i);
+                Real kpa = hdif_.kappa(hdif_.kappa_aniso_para,k,j,i);
+                Real kpe = hdif_.kappa(hdif_.kappa_aniso_perp,k,j,i);
+                // effective diffusion
+                Real D = gm1*((1.0 - HII)*kn*k2
+                       + HII*(kpa*SQR(K_par) + kpe*(k2 - SQR(K_par))));
+
                 dV = pmb->pcoord->GetCellVolume(k,j,i);
                 T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
+
                 if(problem_ID == 0) {
-                    T_ana = T_0*(1.0
-                            +A_T*std::exp(-gm1*kappa_neu*kx*kx*pmb->pmy_mesh->time)
-                            *std::cos(kx*pmb->pcoord->x1v(i)));
+                    T_ana = T_0*(1.0 + A_T*std::exp(-D*pmb->pmy_mesh->time)
+                               *std::cos(kx*pmb->pcoord->x1v(i) + ky*pmb->pcoord->x2v(j)
+                                         + kz*pmb->pcoord->x3v(k)));
                 }
                 T_int = std::max(std::abs(T_sim-T_ana),T_int)*dV;
             }
