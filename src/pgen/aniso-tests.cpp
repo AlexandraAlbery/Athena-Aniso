@@ -53,6 +53,21 @@ Real T_0 = 0; Real A_T = 0;
 int  nx  = 0; int  ny  = 0; int  nz  = 0;
 Real kx  = 0; Real ky  = 0; Real kz  = 0;
 
+// case 1
+Real v0   = 0;
+Real a1 = 0;   // k_hat
+Real a2 = 0;   // b_hat
+Real a3 = 0;   // k_hat x b_hat
+Real b_tilt = 0;
+Real khat_x = 0.0;  Real khat_y = 0.0; Real khat_z = 0.0;
+Real bhat_x = 0.0;  Real bhat_y = 0.0; Real bhat_z = 0.0;
+Real ec_x = 0.0; Real ec_y = 0.0; Real ec_z = 0.0; // k_hat x b_hat
+Real B0_mag = 0.0;
+
+// case 2
+Real dB_amp = 0; // amplitude of the z-field perturbation
+Real Ay = 0; Real Az = 0; // analytical solution for the y and z field perturbations
+
 // Array index for hdf5 output
 const int out_T          = 0;  // temperature
 const int out_sound      = 1;  // adiabatic sound speed
@@ -105,8 +120,17 @@ Real TETimeStep(MeshBlock *pmb);
 Real TemperatureL1(MeshBlock *pmb, int iout);
 Real TemperatureL2(MeshBlock *pmb, int iout);
 Real TemperatureLInf(MeshBlock *pmb, int iout);
-Real VelocityIntegral(MeshBlock *pmb, int iout);
-Real FieldIntegral(MeshBlock *pmb, int iout);
+Real VelocityL1(MeshBlock *pmb, int iout);
+Real VelocityL2(MeshBlock *pmb, int iout);
+Real VelocityLInf(MeshBlock *pmb, int iout);
+Real FieldL1(MeshBlock *pmb, int iout);
+Real FieldL2(MeshBlock *pmb, int iout);
+Real FieldLInf(MeshBlock *pmb, int iout);
+Real DampedAmp(Real g, Real Om, Real t);
+void DampedRotation(Real g, Real q, Real t, Real &C, Real &S);
+void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf);
+void VelocityErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf);
+void FieldErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf);
 
 void Mesh::InitUserMeshData(ParameterInput *pin) {
 
@@ -179,16 +203,18 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
     //EnrollFieldDiffusivity(CalculateMagDiff);
     //EnrollUserTimeStepFunction(TETimeStep);
 
+    // L2 columns hold sum(e^2 dV): take the sqrt in post-processing, since a per-block sqrt
+    // does not survive the sum over MeshBlocks/ranks. L_inf columns are reduced with max.
     AllocateUserHistoryOutput(9);
     EnrollUserHistoryOutput(0, TemperatureL1,   "Temp_L1");
-    EnrollUserHistoryOutput(1, TemperatureL2,   "Temp_L2");
-    EnrollUserHistoryOutput(2, TemperatureLInf, "Temp_LInf");
+    EnrollUserHistoryOutput(1, TemperatureL2,   "Temp_L2sq");
+    EnrollUserHistoryOutput(2, TemperatureLInf, "Temp_LInf", UserHistoryOperation::max);
     EnrollUserHistoryOutput(3, VelocityL1,      "Vel_L1");
-    EnrollUserHistoryOutput(4, VelocityL2,      "Vel_L2");
-    EnrollUserHistoryOutput(5, VelocityInf,     "Vel_LInf");
+    EnrollUserHistoryOutput(4, VelocityL2,      "Vel_L2sq");
+    EnrollUserHistoryOutput(5, VelocityLInf,    "Vel_LInf", UserHistoryOperation::max);
     EnrollUserHistoryOutput(6, FieldL1,         "Field_L1");
-    EnrollUserHistoryOutput(7, FieldL2,         "Field_L2");
-    EnrollUserHistoryOutput(8, FieldInf,        "Field_LInf");
+    EnrollUserHistoryOutput(7, FieldL2,         "Field_L2sq");
+    EnrollUserHistoryOutput(8, FieldLInf,       "Field_LInf", UserHistoryOperation::max);
 
     return;
 }
@@ -267,16 +293,19 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
     // integer to decide what test to run.
     // Make sure to comment/zero out unwanted diffusions in the input file
-    //   case 0: single Fourier mode in T at uniform P
-    //   case 1: amplitude from input (default 1e-6); velocity along k, z-hat x k, or z-hat; tilt via mode_nx/ny
-    //   case 2: Hall phase speed in the eigenvector
+    //   case 0 Thermal Conduction: single Fourier mode in T at uniform P
+    //   case 1 Viscosity: single velocity mode,
+    //           amplitude visc_amp; k in x-y plane via mode_nx/ny;
+    //           b tilted b_tilt degrees out of the plane from z-hat x k-hat (k perp b);
+    //           velocity = visc_a1*k_hat + visc_a2*b_hat + visc_a3*(k_hat x b_hat)
+    //   case 2 Polarised MHD wave: Ohmic + Ambipolar + Hall
     //   case 3: TE eigenmode: k perpendicular to b (Nernst-Ettingshausen)
     //   case 4: Beltrami field for RL
     //   case 5: timestep sweep
 
     switch (problem_ID)
     {
-        case 0:{ // ---- single thermal mode: conduction, Peltier-Seebeck (+ Hall) ----
+        case 0:{ // ---- single thermal mode: conduction ----
             T_0 = P_0/rho_0;
             A_T = pin->GetOrAddReal("problem","mode_amp_T", 1.0e-6);
             nx  = pin->GetOrAddInteger("problem","mode_nx", 1);
@@ -302,101 +331,87 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                 } // j loop
             } // k loop
             break;}
-    case 1:{ // ---- single velocity mode: viscosity and gyroviscosity ----
-    Real v0   = pin->GetOrAddReal("problem","visc_amp", 1.0e-6);
-    int  vdir = pin->GetOrAddInteger("problem","visc_dir", 2); // 1: along k, 2: z-hat x k-hat (in-plane shear), 3: along z
-    int  nx   = pin->GetOrAddInteger("problem","mode_nx", 1);
-    int  ny   = pin->GetOrAddInteger("problem","mode_ny", 0);
-    Real kx   = 2.0*PI*static_cast<Real>(nx)/(xmax - xmin);
-    Real ky   = 2.0*PI*static_cast<Real>(ny)/(ymax - ymin);
-    Real kmag = std::sqrt(SQR(kx) + SQR(ky));
-    Real x  = 0; Real y = 0; Real vel = 0;
+        case 1:{ // ---- single velocity mode: viscosity ----
+        v0   = pin->GetOrAddReal("problem","visc_amp", 1.0e-6);
+        a1 = pin->GetOrAddReal("problem","visc_a1", 1.0);   // k_hat amp
+        a2 = pin->GetOrAddReal("problem","visc_a2", 1.0);   // b_hat amp
+        a3 = pin->GetOrAddReal("problem","visc_a3", 1.0);   // k_hat x b_hat amp
+        b_tilt = PI/3.0;
+        kx   = 2.0*PI/(xmax - xmin);
+        Real x  = 0; Real y = 0; Real z = 0; Real vel = 0;
 
-    if (kmag == 0.0 || vdir < 1 || vdir > 3) {
-        std::stringstream msg;
-        msg << "### FATAL ERROR in ProblemGenerator case 1" << std::endl
-            << "need mode_nx or mode_ny nonzero, and visc_dir = 1, 2 or 3" << std::endl;
-        ATHENA_ERROR(msg);
-    }
+        khat_x = 1.0; khat_y = 0.0; khat_z = 0.0; // k_hat along x direction
+        bhat_x = 0; bhat_y = std::cos(b_tilt); bhat_z = std::sin(b_tilt); // b_hat in y-z plane
+        ec_x = 0.0; ec_y = -bhat_z; ec_z = bhat_y; // k_hat x b_hat
 
-    // unit vector of the velocity: k-hat (compressive), z-hat x k-hat (in-plane shear), or z-hat
-    Real ex = (vdir == 1) ? kx/kmag : ((vdir == 2) ? -ky/kmag : 0.0);
-    Real ey = (vdir == 1) ? ky/kmag : ((vdir == 2) ?  kx/kmag : 0.0);
-    Real ez = (vdir == 3) ? 1.0 : 0.0;
-
-    for (int k = ks; k <= ke; k++ ) {
-        for (int j = js; j <= je; j++ ) {
-            y = this->pcoord->x2v(j);
-            for (int i = is; i <= ie; i++ ) {
-                x = this->pcoord->x1v(i);
-                vel = v0*std::sin(kx*x + ky*y);
-                phydro->u(IDN,k,j,i) = rho_0;
-                phydro->u(IM1,k,j,i) = rho_0*vel*ex;
-                phydro->u(IM2,k,j,i) = rho_0*vel*ey;
-                phydro->u(IM3,k,j,i) = rho_0*vel*ez;
-                phydro->u(IEN,k,j,i) += 0.5*rho_0*vel*vel;
-            }
-        }
-    }
-        break;}
-    case 2:{
-        // ---- Alfven wave: Hall (circular) or Ohmic/ambipolar (linear along z) ----
-        // pol = +1/-1: circularly polarised, needs By_0 = 0; exact Hall eigenmode travelling at vph.
-        // pol = 0    : linearly polarised along z, any By_0 (field in the x-y plane); exact ideal
-        //              eigenmode at vA = |Bx_0|/sqrt(rho_0), static (pure Ohmic decay) if Bx_0 = 0.
-        Real L    = xmax - xmin;
-        Real K    = 2.0*PI/L;     // one wavelength across box (periodic in x)
-        Real dB   = 1.0e-6 * std::sqrt(Bx_0*Bx_0 + By_0*By_0 + Bz_0*Bz_0);
-        Real pol  = pin->GetOrAddReal("problem","alfven_pol", 1.0); // polarisation: +1, -1 or 0
-        Real vA   = std::sqrt((Bx_0*Bx_0)/rho_0); // Alfvén speed on the normal (x) field
-        Real sgn  = (Bx_0 > 0.0) ? 1.0 : -1.0;
-        Real etaH = eta_h; // Hall diffusivity on the background
-        // forward root of v^2 + sgn*pol*etaH*K*v - vA^2 = 0; equals vA when etaH = 0
-        Real vph  = (pol != 0.0) ? -0.5*sgn*pol*etaH*K + std::sqrt(SQR(0.5*etaH*K) + SQR(vA)) : vA;
-        Real vfac = (vph != 0.0) ? -Bx_0/(rho_0*vph) : 0.0;
-        Real x    = 0;
-
-        if (Bz_0 != 0.0 || (pol != 0.0 && By_0 != 0.0)) {
-            std::stringstream msg;
-            msg << "### FATAL ERROR in ProblemGenerator case 2" << std::endl
-                << "Alfven wave requires Bz_0 = 0, and By_0 = 0 unless alfven_pol = 0"
-                << std::endl;
-            ATHENA_ERROR(msg);
-        }
-
-        // eigenmode: v_perp = -(Bx_0/(rho_0*vph)) * b_perp  (+x propagation; = -(vA/Bx_0) b_perp when vph = vA)
-        for (int kk = ks; kk <= ke; kk++ ) {
-            for (int j = js; j <= je; j++ ) {
-                for (int i = is; i <= ie; i++ ) {
-                    x = this->pcoord->x1v(i);
-                    Real By_pert = (pol != 0.0) ? dB*std::cos(K*x) : 0.0;
-                    Real Bz_pert = (pol != 0.0) ? pol*dB*std::sin(K*x) : dB*std::cos(K*x);
-                    Real vy = vfac*By_pert;
-                    Real vz = vfac*Bz_pert;
-
-                    phydro->u(IDN,kk,j,i) = rho_0;
-                    phydro->u(IM1,kk,j,i) = 0.0;
-                    phydro->u(IM2,kk,j,i) = rho_0*vy;
-                    phydro->u(IM3,kk,j,i) = rho_0*vz;
-                    phydro->u(IEN,kk,j,i) += + 0.5*rho_0*(vy*vy + vz*vz);
-                }
-            }
-        }
+        // field along b_hat, velocity directions are the viscous eigenvectors
+        B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
         for (int k = ks; k <= ke+1; k++ ) {
             for (int j = js; j <= je+1; j++ ) {
                 for (int i = is; i <= ie+1; i++ ) {
-                    Real xf = this->pcoord->x1v(i);   // x at cell centre for x2f/x3f
-                    Real b2 = (pol != 0.0) ? dB*std::cos(K*xf) : 0.0;
-                    Real b3 = (pol != 0.0) ? pol*dB*std::sin(K*xf) : dB*std::cos(K*xf);
-                    pfield->b.x1f(k,j,i) = Bx_0;       // uniform normal field
-                    pfield->b.x2f(k,j,i) = By_0 + b2;
-                    pfield->b.x3f(k,j,i) = b3;
-                    if (k<=ke && j<=je && i<=ie) {
-                        phydro->u(IEN,k,j,i) += 0.5*(b2*b2 + b3*b3);
-                    }
+                    pfield->b.x1f(k,j,i) = B0_mag*bhat_x;
+                    pfield->b.x2f(k,j,i) = B0_mag*bhat_y;
+                    pfield->b.x3f(k,j,i) = B0_mag*bhat_z;
                 }
             }
         }
+
+        for (int k = ks; k <= ke; k++ ) {
+            for (int j = js; j <= je; j++ ) {
+            z = this->pcoord->x3v(k);
+                y = this->pcoord->x2v(j);
+                for (int i = is; i <= ie; i++ ) {
+                    x = this->pcoord->x1v(i);
+                    vel = v0*std::sin(kx*x + ky*y + kz*z);
+                    phydro->u(IM1,k,j,i) = rho_0*vel*(a1*khat_x + a2*bhat_x + a3*ec_x);
+                    phydro->u(IM2,k,j,i) = rho_0*vel*(a1*khat_y + a2*bhat_y + a3*ec_y);
+                    phydro->u(IM3,k,j,i) = rho_0*vel*(a1*khat_z + a2*bhat_z + a3*ec_z);
+                    phydro->u(IEN,k,j,i) += 0.5*rho_0*vel*vel*(a1*a1 + a2*a2 + a3*a3);
+                }
+            }
+        }
+        break;}
+        case 2:{
+        // ---- frozen-flow field test: Ohmic, ambipolar and Hall, in any combination ----
+        // Background B0 = B0_mag (cos theta, sin theta, 0), theta = 30 deg to k = K x-hat
+        // perturbation dB cos(Kx) z-hat
+        Real theta = PI/6.0;  // angle between B0 and k
+        B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
+        bhat_x = std::cos(theta);  bhat_y = std::sin(theta);  bhat_z = 0.0;
+        kx     = 2.0*PI/(xmax - xmin); // one wavelength in x
+        dB_amp = 1.0e-6*B0_mag;
+
+        if (B0_mag == 0.0) {
+            std::stringstream msg;
+            msg << "### FATAL ERROR in ProblemGenerator case 2" << std::endl
+                << "needs a nonzero background field (the input sets its magnitude)" << std::endl;
+            ATHENA_ERROR(msg);
+        }
+
+        for (int k = ks; k <= ke; k++ ) {
+            for (int j = js; j <= je; j++ ) {
+                for (int i = is; i <= ie; i++ ) {
+                    Real b3 = dB_amp*std::cos(kx*this->pcoord->x1v(i));
+                    phydro->u(IDN,k,j,i) = rho_0;
+                    phydro->u(IM1,k,j,i) = 0.0;
+                    phydro->u(IM2,k,j,i) = 0.0;
+                    phydro->u(IM3,k,j,i) = 0.0;
+                    phydro->u(IEN,k,j,i) = B_energy + 0.5*b3*b3;
+                }
+            }
+        }
+        for (int k = ks; k <= ke; k++ )
+            for (int j = js; j <= je; j++ )
+                for (int i = is; i <= ie+1; i++ )
+                    pfield->b.x1f(k,j,i) = B0_mag*bhat_x;
+        for (int k = ks; k <= ke; k++ )
+            for (int j = js; j <= je+1; j++ )
+                for (int i = is; i <= ie; i++ )
+                    pfield->b.x2f(k,j,i) = B0_mag*bhat_y;
+        for (int k = ks; k <= ke+1; k++ )
+            for (int j = js; j <= je; j++ )
+                for (int i = is; i <= ie; i++ )
+                    pfield->b.x3f(k,j,i) = dB_amp*std::cos(kx*this->pcoord->x1v(i));
         break;}
         case 3:{// ---- TE eigenmode: k perpendicular to b (Nernst-Ettingshausen) ----
             Real T_0    = P_0/rho_0;
@@ -1190,8 +1205,6 @@ void CalculateMagDiff(FieldDiffusion *pfdif, MeshBlock *pmb,
             }
         }
     }
-
-
     return;
 }
 
@@ -1210,11 +1223,14 @@ void CalculateWellPosedness(MeshBlock *pmb){
                 Real kn = pmb->phydro->hdif.kappa(HydroDiffusion::kappa_neutral,k,j,i);
                 Real kp = pmb->phydro->hdif.kappa(HydroDiffusion::kappa_perp,k,j,i);
                 Real eta_o = pmb->pfield->fdif.etaB(FieldDiffusion::ohmic,k,j,i);
-                Real eta_ad = pmb->pfield->fdif.etaB(FieldDiffusion::ambipolar,k,j,i);
+                Real eta_a = pmb->pfield->fdif.etaB(FieldDiffusion::ambipolar,k,j,i)*
+                              (pmb->pfield->bcc(IB1,k,j,i)*pmb->pfield->bcc(IB1,k,j,i)
+                               + pmb->pfield->bcc(IB2,k,j,i)*pmb->pfield->bcc(IB2,k,j,i)
+                               + pmb->pfield->bcc(IB3,k,j,i)*pmb->pfield->bcc(IB3,k,j,i));
                 Real kjw = pmb->pfield->fdif.thermKappa(FieldDiffusion::ThermElecProcess::
-                    kappa_TE_wedge,k,j,i);
+                                                        kappa_TE_wedge,k,j,i);
 
-                Real wp = gm1*((1-HII)*kn + HII*kp)*(eta_o+eta_ad) /
+                Real wp = gm1*((1-HII)*kn + HII*kp)*(eta_o+eta_a) /
                           kjw*kjw*HII*HII/pmb->phydro->w(IEN,k,j,i)/gm1;
                 pmb->user_out_var(out_WP,k,j,i) = wp;
 
@@ -1230,305 +1246,245 @@ Real TETimeStep(MeshBlock *pmb){
     return 1e-4;
 }
 
-// Calculates the L1 temperature error int|T_sim-T_ana| dV for convergence tests
+//----------------------------------------------------------------------------------------
+//! \fn void TemperatureErrors
+//! \brief Temperature errors e = |T_sim - T_ana| on this MeshBlock:
+//!  l1 = sum e dV, l2sq = sum e^2 dV, linf = max e.
+void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
+    l1 = 0.0; l2sq = 0.0; linf = 0.0;
+
+    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+    Coordinates *pco = pmb->pcoord;
+    Real t = pmb->pmy_mesh->time;
+
+    Real amp = 0.0; // case 0: mode amplitude
+    switch (problem_ID) {
+        case 0:{ // ---- single thermal mode: frozen-flow (isochoric) decay ----
+            // T(r,t) = T_0*(1 + A_T*exp(-rate*t)*cos(k.x)), rate = (gamma-1)*kappa*k^2.
+            Real k2 = kx*kx + ky*ky + kz*kz;
+            Real B0 = std::sqrt(Bx_0*Bx_0 + By_0*By_0 + Bz_0*Bz_0);
+            Real K_par = (B0 > 0.0) ? (kx*Bx_0 + ky*By_0 + kz*Bz_0)/B0 : 0.0; // k.b_hat
+            Real HII = (kappa_neu > 0.0) ? ion_frac : 1.0; // as in ThermalFluxAniso
+            Real rate = gm1*((1.0 - HII)*kappa_neu*k2
+                        + HII*(kappa_para*SQR(K_par) + kappa_perp*(k2 - SQR(K_par))));
+            amp = A_T*std::exp(-rate*t);
+            break;}
+        default: // no analytical temperature for this problem
+            return;
+    }
+
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                Real T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
+                Real T_ana = 0.0;
+                switch (problem_ID) {
+                    case 0:
+                        T_ana = T_0*(1.0 + amp*std::cos(kx*pco->x1v(i) + ky*pco->x2v(j)
+                                                        + kz*pco->x3v(k)));
+                        break;
+                }
+                Real err = std::abs(T_sim - T_ana);
+                Real dV = pco->GetCellVolume(k,j,i);
+                l1 += err*dV;
+                l2sq += err*err*dV;
+                linf = std::max(linf, err);
+            }
+        }
+    }
+    return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void VelocityErrors
+//! \brief Velocity errors e = |v_sim - v_ana| on this MeshBlock:
+//  l1 = sum e dV, l2sq = sum e^2 dV, linf = max e.
+//  v(r,0) = v0*sin(k.x)*exp(-k^2*nu*t)*(A1 k_hat + A2 b_hat + A3 k_hat x b_hat)
+//  vx(r,t) = v0*A1(0)exp(-(kx^2 t)*nu_comp)sin(kx x)
+//  vy(r,t) = v0*(a2(0)*exp(-(kx^2 t)*nu_sheary)*cos(theta)
+//                a3(0)*exp(-(kx^2 t)*nu_shearz)*sin(theta))*sin(kx x)
+//  vz(r,t) = v0*(a2(0)*exp(-(kx^2 t)*nu_sheary)*sin(theta)
+//                a3(0)*exp(-(kx^2 t)*nu_shearz)*cos(theta))*sin(kx x)
+// nu_comp = zeta_bulk/rho_0 + (4/3)*nu_neu*(1-HII) + HII*(nu_para/3 + nu_perp1)
+// nu_sheary = (1-HII)*nu_neu + 4*HII*nu_perp2
+// nu_shearz = (1-HII)*nu_neu +   HII*nu_perp1
+void VelocityErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
+    l1 = 0.0; l2sq = 0.0; linf = 0.0;
+
+    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+    Coordinates *pco = pmb->pcoord;
+    Real t = pmb->pmy_mesh->time;
+
+    Real ev_x = 0.0; Real ev_y = 0.0; Real ev_z = 0.0; // case 1: damped mode vector
+    switch (problem_ID) {
+        case 1:{ // ---- single velocity mode: viscosity ----
+            Real k2 = kx*kx;
+            Real HII = (nu_neu > 0.0) ? ion_frac : 1.0;
+            Real M1 = zeta_bulk/rho_0 + (4.0/3.0)*(1.0 - HII)*nu_neu
+                      + HII*(nu_para/3.0 + nu_perp1);
+            Real M2 = (1.0 - HII)*nu_neu + 4.0*HII*nu_perp2;
+            Real M3 = (1.0 - HII)*nu_neu + HII*nu_perp1;
+            Real A1 = a1*std::exp(-k2*M1*t); // along k
+            Real A2 = a2*std::exp(-k2*M2*t); // along b
+            Real A3 = a3*std::exp(-k2*M3*t); // along k x b
+            ev_x = A1*khat_x + A2*bhat_x + A3*ec_x;
+            ev_y = A1*khat_y + A2*bhat_y + A3*ec_y;
+            ev_z = A1*khat_z + A2*bhat_z + A3*ec_z;
+            break;}
+        default:
+            return;
+    }
+
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                Real vx_ana = 0.0; Real vy_ana = 0.0; Real vz_ana = 0.0;
+                switch (problem_ID) {
+                    case 1:{
+                        Real s = v0*std::sin(kx*pco->x1v(i));
+                        vx_ana = s*ev_x;
+                        vy_ana = s*ev_y;
+                        vz_ana = s*ev_z;
+                        break;}
+                }
+                Real dvx = pmb->phydro->w(IVX,k,j,i) - vx_ana;
+                Real dvy = pmb->phydro->w(IVY,k,j,i) - vy_ana;
+                Real dvz = pmb->phydro->w(IVZ,k,j,i) - vz_ana;
+                Real err = std::sqrt(SQR(dvx) + SQR(dvy) + SQR(dvz));
+                Real dV = pco->GetCellVolume(k,j,i);
+                l1 += err*dV;
+                l2sq += err*err*dV;
+                linf = std::max(linf, err);
+            }
+        }
+    }
+    return;
+}
+
+// L1 temperature error sum|T_sim-T_ana| dV for convergence tests
 Real TemperatureL1(MeshBlock *pmb, int iout) {
-
-    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
-    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
-    Real T_int = 0;
-    Real T_sim = 0;
-    Real T_ana = 0;
-    Real t = 0;
-    Real T_0 = P_0/rho_0;
-    Real dV = 0;
-    Real k2 = kx*kx + ky*ky + kz*kz;
-    Real B0 = std::sqrt(Bx_0*Bx_0 + By_0*By_0 + Bz_0*Bz_0);
-    HydroDiffusion &hdif_ = pmb->phydro->hdif;
-
-    for (int k = ks; k <= ke; k++) {
-        for (int j = js; j <= je; j++) {
-            for (int i = is; i <= ie; i++) {
-                Real K_par = (B0 > 0.0) ? (kx*Bx_0 + ky*By_0 + kz*Bz_0)/B0 : 0.0;
-                Real HII = pmb->phydro->hdif.ion_frac(k,j,i);
-                Real kn = hdif_.kappa(hdif_.kappa_aniso_neutral,k,j,i);
-                Real kpa = hdif_.kappa(hdif_.kappa_aniso_para,k,j,i);
-                Real kpe = hdif_.kappa(hdif_.kappa_aniso_perp,k,j,i);
-                // effective diffusion
-                Real D = gm1*((1.0 - HII)*kn*k2
-                       + HII*(kpa*SQR(K_par) + kpe*(k2 - SQR(K_par))));
-
-                dV = pmb->pcoord->GetCellVolume(k,j,i);
-                T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
-
-                if(problem_ID == 0) {
-                    T_ana = T_0*(1.0 + A_T*std::exp(-D*pmb->pmy_mesh->time)
-                               *std::cos(kx*pmb->pcoord->x1v(i) + ky*pmb->pcoord->x2v(j)
-                                         + kz*pmb->pcoord->x3v(k)));
-                }
-                T_int += std::abs(T_sim-T_ana)*dV;
-            }
-        }
-    }
-    return T_int;
+    Real l1, l2sq, linf;
+    TemperatureErrors(pmb, l1, l2sq, linf);
+    return l1;
 }
 
-// Calculates the L2 temperature error int(T_sim-T_ana)^2 dV for convergence tests
+// Squared L2 temperature error sum(T_sim-T_ana)^2 dV; take the sqrt after the MeshBlock sum
 Real TemperatureL2(MeshBlock *pmb, int iout) {
-
-    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
-    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
-    Real T_int = 0;
-    Real T_sim = 0;
-    Real T_ana = 0;
-    Real t = 0;
-    Real T_0 = P_0/rho_0;
-    Real dV = 0;
-    Real k2 = kx*kx + ky*ky + kz*kz;
-    Real B0 = std::sqrt(Bx_0*Bx_0 + By_0*By_0 + Bz_0*Bz_0);
-    HydroDiffusion &hdif_ = pmb->phydro->hdif;
-
-    for (int k = ks; k <= ke; k++) {
-        for (int j = js; j <= je; j++) {
-            for (int i = is; i <= ie; i++) {
-                Real K_par = (B0 > 0.0) ? (kx*Bx_0 + ky*By_0 + kz*Bz_0)/B0 : 0.0;
-                Real HII = pmb->phydro->hdif.ion_frac(k,j,i);
-                Real kn = hdif_.kappa(hdif_.kappa_aniso_neutral,k,j,i);
-                Real kpa = hdif_.kappa(hdif_.kappa_aniso_para,k,j,i);
-                Real kpe = hdif_.kappa(hdif_.kappa_aniso_perp,k,j,i);
-                // effective diffusion
-                Real D = gm1*((1.0 - HII)*kn*k2
-                       + HII*(kpa*SQR(K_par) + kpe*(k2 - SQR(K_par))));
-
-                dV = pmb->pcoord->GetCellVolume(k,j,i);
-                T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
-
-                if(problem_ID == 0) {
-                    T_ana = T_0*(1.0 + A_T*std::exp(-D*pmb->pmy_mesh->time)
-                               *std::cos(kx*pmb->pcoord->x1v(i) + ky*pmb->pcoord->x2v(j)
-                                         + kz*pmb->pcoord->x3v(k)));
-                }
-                T_int += (T_sim-T_ana)*(T_sim-T_ana)*dV;
-            }
-        }
-    }
-    T_int = std::sqrt(T_int);
-    return T_int;
+    Real l1, l2sq, linf;
+    TemperatureErrors(pmb, l1, l2sq, linf);
+    return l2sq;
 }
 
-// Calculates the L_inf temperature error max|T_sim-T_ana| dV for convergence tests
+// L_inf temperature error max|T_sim-T_ana|; enrolled with the max reduction
 Real TemperatureLInf(MeshBlock *pmb, int iout) {
-
-    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
-    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
-    Real T_int = 0;
-    Real T_sim = 0;
-    Real T_ana = 0;
-    Real t = 0;
-    Real T_0 = P_0/rho_0;
-    Real dV = 0;
-    Real k2 = kx*kx + ky*ky + kz*kz;
-    Real B0 = std::sqrt(Bx_0*Bx_0 + By_0*By_0 + Bz_0*Bz_0);
-    HydroDiffusion &hdif_ = pmb->phydro->hdif;
-
-    for (int k = ks; k <= ke; k++) {
-        for (int j = js; j <= je; j++) {
-            for (int i = is; i <= ie; i++) {
-                Real K_par = (B0 > 0.0) ? (kx*Bx_0 + ky*By_0 + kz*Bz_0)/B0 : 0.0;
-                Real HII = pmb->phydro->hdif.ion_frac(k,j,i);
-                Real kn = hdif_.kappa(hdif_.kappa_aniso_neutral,k,j,i);
-                Real kpa = hdif_.kappa(hdif_.kappa_aniso_para,k,j,i);
-                Real kpe = hdif_.kappa(hdif_.kappa_aniso_perp,k,j,i);
-                // effective diffusion
-                Real D = gm1*((1.0 - HII)*kn*k2
-                       + HII*(kpa*SQR(K_par) + kpe*(k2 - SQR(K_par))));
-
-                dV = pmb->pcoord->GetCellVolume(k,j,i);
-                T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
-
-                if(problem_ID == 0) {
-                    T_ana = T_0*(1.0 + A_T*std::exp(-D*pmb->pmy_mesh->time)
-                               *std::cos(kx*pmb->pcoord->x1v(i) + ky*pmb->pcoord->x2v(j)
-                                         + kz*pmb->pcoord->x3v(k)));
-                }
-                T_int = std::max(std::abs(T_sim-T_ana),T_int)*dV;
-            }
-        }
-    }
-    return T_int;
+    Real l1, l2sq, linf;
+    TemperatureErrors(pmb, l1, l2sq, linf);
+    return linf;
 }
 
-// Calculates the L1 field error sum|v_sim-v_ana| dV for convergence tests
+// L1 velocity error sum|v_sim-v_ana| dV for convergence tests
 Real VelocityL1(MeshBlock *pmb, int iout) {
-
-    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
-    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
-    Real v_int = 0;
-    Real vx_sim = 0; Real vy_sim = 0; Real vz_sim = 0;
-    Real vx_ana = 0; Real vy_ana = 0; Real vz_ana = 0;
-    Real vx_e = 0; Real vy_e = 0; Real vz_e = 0;
-    Real dV = 0;
-    for (int k = ks; k <= ke; k++) {
-        for (int j = js; j <= je; j++) {
-            for (int i = is; i <= ie; i++) {
-                dV = pmb->pcoord->GetCellVolume(k,j,i);
-                vx_sim = pmb->phydro->w(IVX,k,j,i);
-                vy_sim = pmb->phydro->w(IVY,k,j,i);
-                vz_sim = pmb->phydro->w(IVZ,k,j,i);
-
-                vx_e = vx_sim - vx_ana;
-                vy_e = vy_sim - vy_ana;
-                vz_e = vz_sim - vz_ana;
-
-                v_int += std::sqrt(SQR(vx_e) + SQR(vy_e) + SQR(vz_e))*dV;
-            }
-        }
-    }
-    return v_int;
+    Real l1, l2sq, linf;
+    VelocityErrors(pmb, l1, l2sq, linf);
+    return l1;
 }
 
-// Calculates the L2 velocity error sqrt(sum|v_sim-v_ana|^2 dV) for convergence tests
+// Squared L2 velocity error sum|v_sim-v_ana|^2 dV; take the sqrt after the MeshBlock sum
 Real VelocityL2(MeshBlock *pmb, int iout) {
-
-    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
-    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
-    Real v_int = 0;
-    Real vx_sim = 0; Real vy_sim = 0; Real vz_sim = 0;
-    Real vx_ana = 0; Real vy_ana = 0; Real vz_ana = 0;
-    Real vx_e = 0; Real vy_e = 0; Real vz_e = 0;
-    Real dV = 0;
-    for (int k = ks; k <= ke; k++) {
-        for (int j = js; j <= je; j++) {
-            for (int i = is; i <= ie; i++) {
-                dV = pmb->pcoord->GetCellVolume(k,j,i);
-                vx_sim = pmb->phydro->w(IVX,k,j,i);
-                vy_sim = pmb->phydro->w(IVY,k,j,i);
-                vz_sim = pmb->phydro->w(IVZ,k,j,i);
-
-                vx_e = vx_sim - vx_ana;
-                vy_e = vy_sim - vy_ana;
-                vz_e = vz_sim - vz_ana;
-
-                v_int += SQR(vx_e) + SQR(vy_e) + SQR(vz_e)*dV;
-            }
-        }
-    }
-    v_int = std::sqrt(v_int);
-    return v_int;
+    Real l1, l2sq, linf;
+    VelocityErrors(pmb, l1, l2sq, linf);
+    return l2sq;
 }
 
-// Calculates the L_Inf veolcity error max|v_sim-v_ana|dV for convergence tests
-Real VelocityInf(MeshBlock *pmb, int iout) {
-
-    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
-    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
-    Real v_int = 0;
-    Real vx_sim = 0; Real vy_sim = 0; Real vz_sim = 0;
-    Real vx_ana = 0; Real vy_ana = 0; Real vz_ana = 0;
-    Real vx_e = 0; Real vy_e = 0; Real vz_e = 0;
-    Real dV = 0;
-    for (int k = ks; k <= ke; k++) {
-        for (int j = js; j <= je; j++) {
-            for (int i = is; i <= ie; i++) {
-                dV = pmb->pcoord->GetCellVolume(k,j,i);
-                vx_sim = pmb->phydro->w(IVX,k,j,i);
-                vy_sim = pmb->phydro->w(IVY,k,j,i);
-                vz_sim = pmb->phydro->w(IVZ,k,j,i);
-
-                vx_e = vx_sim - vx_ana;
-                vy_e = vy_sim - vy_ana;
-                vz_e = vz_sim - vz_ana;
-
-                v_int = std::max(std::sqrt(SQR(vx_e) + SQR(vy_e) + SQR(vz_e))*dV,v_int);
-            }
-        }
-    }
-    return v_int;
+// L_inf velocity error max|v_sim-v_ana|; enrolled with the max reduction
+Real VelocityLInf(MeshBlock *pmb, int iout) {
+    Real l1, l2sq, linf;
+    VelocityErrors(pmb, l1, l2sq, linf);
+    return linf;
 }
 
-// Calculates the L1 field error sum|B_sim-B_ana| dV for convergence tests
+//----------------------------------------------------------------------------------------
+//! \fn void FieldErrors
+//! \brief Magnetic field errors e = |B_sim - B_ana| (cell-centred) on this MeshBlock:
+//!  l1 = sum e dV, l2sq = sum e^2 dV, linf = max e.
+//----------------------------------------------------------------------------------------
+// Field error norms for case 2 (frozen flow)
+// dB_y = e^{-abar tau} [P_y cosh(D tau) + Q_y sinh(D tau)/D], P_y = 0,   Q_y = -beta dB0
+// dB_z = e^{-abar tau} [P_z cosh(D tau) + Q_z sinh(D tau)/D], P_z = dB0, Q_z = delA dB0
+void FieldErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
+  Coordinates *pco = pmb->pcoord;
+  int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+  int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+  const Real t = pmb->pmy_mesh->time;
+  l1 = 0.0; l2sq = 0.0; linf = 0.0;
+  if (problem_ID != 2) return;
+
+  const Real eta_a = eta_ad*SQR(B0_mag);             // ambipolar diffusion coefficient
+  const Real c    = bhat_x, s = bhat_y;              // direction set in the pgen
+  const Real abar = eta_o + 0.5*eta_a*(1.0 + c*c);   // mean damping / K^2
+  const Real delA = 0.5*eta_a*s*s;                   // ambipolar anisotropy / K^2
+  const Real beta = eta_h*c;                         // Hall rotation / K^2 (sign of k.b)
+  const Real D2   = delA*delA - beta*beta;           // D^2
+  const Real tau  = kx*kx*t;
+  const Real q    = D2*tau*tau;                      // (D tau)^2
+
+  Real EC, ES; // e^{-abar tau} cosh(D tau), e^{-abar tau} sinh(D tau)/D
+  if (std::abs(q) < 1.0e-4) { // Taylor series in D^2: no 0/0 at D = 0, limit is tau
+    const Real decay = std::exp(-abar*tau);
+    EC = decay*(1.0 + q/2.0 + q*q/24.0);
+    ES = decay*tau*(1.0 + q/6.0 + q*q/120.0);
+  } else if (D2 > 0.0) { // ambipolar dominates: D real
+    const Real D  = std::sqrt(D2);
+    const Real ep = std::exp(-(abar - D)*tau);
+    const Real em = std::exp(-(abar + D)*tau);
+    EC = 0.5*(ep + em);
+    ES = 0.5*(ep - em)/D;
+  } else {  // Hall dominates: D = i w
+    const Real w     = std::sqrt(-D2);
+    const Real decay = std::exp(-abar*tau);
+    EC = decay*std::cos(w*tau);
+    ES = decay*std::sin(w*tau)/w;
+  }
+  const Real Ay = -dB_amp*beta*ES; // dBy
+  const Real Az =  dB_amp*(EC + delA*ES); // dBz
+
+  for (int k = ks; k <= ke; k++) {
+    for (int j = js; j <= je; j++) {
+      for (int i = is; i <= ie; i++) {
+        Real cx  = std::cos(kx*pco->x1v(i));
+        Real dbx = pmb->pfield->bcc(IB1,k,j,i) - B0_mag*bhat_x;
+        Real dby = pmb->pfield->bcc(IB2,k,j,i) - (B0_mag*bhat_y + Ay*cx);
+        Real dbz = pmb->pfield->bcc(IB3,k,j,i) - Az*cx;
+        Real err = std::sqrt(SQR(dbx) + SQR(dby) + SQR(dbz));
+        Real dV  = pco->GetCellVolume(k,j,i);
+        l1   += err*dV;
+        l2sq += err*err*dV;
+        linf  = std::max(linf, err);
+      }
+    }
+  }
+  return;
+}
+
+// L1 field error sum|B_sim-B_ana| dV for convergence tests
 Real FieldL1(MeshBlock *pmb, int iout) {
-
-    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
-    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
-    Real B_int = 0;
-    Real Bx_sim = 0; Real By_sim = 0; Real Bz_sim = 0;
-    Real Bx_ana = 0; Real By_ana = 0; Real Bz_ana = 0;
-    Real Bx_e = 0; Real By_e = 0; Real Bz_e = 0;
-    Real dV = 0;
-    for (int k = ks; k <= ke; k++) {
-        for (int j = js; j <= je; j++) {
-            for (int i = is; i <= ie; i++) {
-                dV = pmb->pcoord->GetCellVolume(k,j,i);
-                Bx_sim = pmb->pfield->bcc(IB1,k,j,i);
-                By_sim = pmb->pfield->bcc(IB2,k,j,i);
-                Bz_sim = pmb->pfield->bcc(IB3,k,j,i);
-
-                Bx_e = Bx_sim - Bx_ana;
-                By_e = By_sim - By_ana;
-                Bz_e = Bz_sim - Bz_ana;
-
-                B_int += std::sqrt(SQR(Bx_e) + SQR(By_e) + SQR(Bz_e))*dV;
-            }
-        }
-    }
-    return B_int;
+    Real l1, l2sq, linf;
+    FieldErrors(pmb, l1, l2sq, linf);
+    return l1;
 }
 
-// Calculates the L2 field error sqrt(sum|B_sim-B_ana|^2 dV) for convergence tests
+// Squared L2 field error sum|B_sim-B_ana|^2 dV; take the sqrt after the MeshBlock sum
 Real FieldL2(MeshBlock *pmb, int iout) {
-
-    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
-    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
-    Real B_int = 0;
-    Real Bx_sim = 0; Real By_sim = 0; Real Bz_sim = 0;
-    Real Bx_ana = 0; Real By_ana = 0; Real Bz_ana = 0;
-    Real Bx_e = 0; Real By_e = 0; Real Bz_e = 0;
-    Real dV = 0;
-    for (int k = ks; k <= ke; k++) {
-        for (int j = js; j <= je; j++) {
-            for (int i = is; i <= ie; i++) {
-                dV = pmb->pcoord->GetCellVolume(k,j,i);
-                Bx_sim = pmb->pfield->bcc(IB1,k,j,i);
-                By_sim = pmb->pfield->bcc(IB2,k,j,i);
-                Bz_sim = pmb->pfield->bcc(IB3,k,j,i);
-
-                Bx_e = Bx_sim - Bx_ana;
-                By_e = By_sim - By_ana;
-                Bz_e = Bz_sim - Bz_ana;
-
-                B_int += SQR(Bx_e) + SQR(By_e) + SQR(Bz_e)*dV;
-            }
-        }
-    }
-    B_int = std::sqrt(B_int);
-    return B_int;
+    Real l1, l2sq, linf;
+    FieldErrors(pmb, l1, l2sq, linf);
+    return l2sq;
 }
 
-// Calculates the L_Inf field error max|B_sim-B_ana|dV for convergence tests
-Real FieldInf(MeshBlock *pmb, int iout) {
-
-    int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
-    int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
-    Real B_int = 0;
-    Real Bx_sim = 0; Real By_sim = 0; Real Bz_sim = 0;
-    Real Bx_ana = 0; Real By_ana = 0; Real Bz_ana = 0;
-    Real Bx_e = 0; Real By_e = 0; Real Bz_e = 0;
-    Real dV = 0;
-    for (int k = ks; k <= ke; k++) {
-        for (int j = js; j <= je; j++) {
-            for (int i = is; i <= ie; i++) {
-                dV = pmb->pcoord->GetCellVolume(k,j,i);
-                Bx_sim = pmb->pfield->bcc(IB1,k,j,i);
-                By_sim = pmb->pfield->bcc(IB2,k,j,i);
-                Bz_sim = pmb->pfield->bcc(IB3,k,j,i);
-
-                Bx_e = Bx_sim - Bx_ana;
-                By_e = By_sim - By_ana;
-                Bz_e = Bz_sim - Bz_ana;
-
-                B_int = std::max(std::sqrt(SQR(Bx_e) + SQR(By_e) + SQR(Bz_e))*dV,B_int);
-            }
-        }
-    }
-    return B_int;
+// L_inf field error max|B_sim-B_ana|; enrolled with the max reduction
+Real FieldLInf(MeshBlock *pmb, int iout) {
+    Real l1, l2sq, linf;
+    FieldErrors(pmb, l1, l2sq, linf);
+    return linf;
 }
