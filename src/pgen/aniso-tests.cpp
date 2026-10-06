@@ -67,6 +67,12 @@ Real B0_mag = 0.0;
 // case 2 + 3
 Real dB_amp = 0; // amplitude of the field perturbation
 
+// case 3 + 4
+Real dT_amp;
+
+// case 4
+Real kB = 0; // Beltrami wavenumber: b turns once over z
+
 // Array index for hdf5 output
 const int out_T      = 0;  // temperature
 const int out_sound    = 1;  // adiabatic sound speed
@@ -297,14 +303,17 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   //       amplitude visc_amp; k in x-y plane via mode_nx/ny;
   //       b tilted b_tilt degrees out of the plane from z-hat x k-hat (k perp b);
   //       velocity = visc_a1*k_hat + visc_a2*b_hat + visc_a3*(k_hat x b_hat)
-  //   case 2 Polarised MHD wave: Ohmic + Ambipolar + Hall
-  //   case 3: TE eigenmode: k perpendicular to b (Nernst-Ettingshausen)
-  //   case 4: Beltrami field for RL
-  //   case 5: timestep sweep
+  //   case 2: frozen-flow field mode: Ohmic + ambipolar + Hall
+  //   case 3: frozen-flow TE mode: k perpendicular to b (Nernst-Ettingshausen)
+  //   case 4: frozen-flow Righi-Leduc on a Beltrami field
+  //   case 5: frozen-flow gyroviscosity: Pi3 across b, Pi4 along b
+  //   case 6: frozen-flow Peltier-Seebeck (+ Hall)
+  //   case 7: HLLE-mod tests
+  //   case 8: timestep sweep
 
   switch (problem_ID)
   {
-    case 0:{ // ---- single thermal mode: conduction ----
+    case 0: { // ---- single thermal mode: conduction ----
       T_0 = P_0/rho_0;
       A_T = pin->GetOrAddReal("problem","mode_amp_T", 1.0e-6);
       nx  = pin->GetOrAddInteger("problem","mode_nx", 1);
@@ -316,28 +325,28 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       Real B_energy = 0.5*(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
       Real x = 0; Real y = 0; Real z = 0; Real T_local = 0;
 
-      for (int k = ks; k <= ke; k++ ) {
-        z = this->pcoord->x3v(k);
-        for (int j = js; j <= je; j++ ) {
-          y = this->pcoord->x2v(j);
-          for (int i = is; i <= ie; i++ ) {
-            x = this->pcoord->x1v(i);
-            // single Fourier mode in T at uniform pressure:
-            T_local = T_0*(1.0 + A_T*std::cos(kx*x + ky*y + kz*z));
-            phydro->u(IDN,k,j,i) = P_0/T_local;    // pressure equilibrium
-            phydro->u(IEN,k,j,i) = P_0/gm1 + B_energy; // uniform
-          } // i loop
-        } // j loop
-      } // k loop
-      break;}
-    case 1:{ // ---- single velocity mode: viscosity ----
-    v0   = pin->GetOrAddReal("problem","visc_amp", 1.0e-6);
-    a1 = pin->GetOrAddReal("problem","visc_a1", 1.0);   // k_hat amp
-    a2 = pin->GetOrAddReal("problem","visc_a2", 1.0);   // b_hat amp
-    a3 = pin->GetOrAddReal("problem","visc_a3", 1.0);   // k_hat x b_hat amp
-    b_tilt = PI/3.0;
-    kx   = 2.0*PI/(xmax - xmin);
-    Real x  = 0; Real y = 0; Real z = 0; Real vel = 0;
+            for (int k = ks; k <= ke; k++ ) {
+                z = this->pcoord->x3v(k);
+                for (int j = js; j <= je; j++ ) {
+                    y = this->pcoord->x2v(j);
+                    for (int i = is; i <= ie; i++ ) {
+                        x = this->pcoord->x1v(i);
+                        // single Fourier mode in T at uniform pressure:
+                        T_local = T_0*(1.0 + A_T*std::cos(kx*x + ky*y + kz*z));
+                        phydro->u(IDN,k,j,i) = P_0/T_local;        // pressure equilibrium
+                        phydro->u(IEN,k,j,i) = P_0/gm1 + B_energy; // uniform
+                    } // i loop
+                } // j loop
+            } // k loop
+            break;}
+        case 1: { // ---- single velocity mode: viscosity ----
+        v0   = pin->GetOrAddReal("problem","visc_amp", 1.0e-6);
+        a1 = pin->GetOrAddReal("problem","visc_a1", 1.0);   // k_hat amp
+        a2 = pin->GetOrAddReal("problem","visc_a2", 1.0);   // b_hat amp
+        a3 = pin->GetOrAddReal("problem","visc_a3", 1.0);   // k_hat x b_hat amp
+        b_tilt = PI/3.0;
+        kx   = 2.0*PI/(xmax - xmin);
+        Real x  = 0; Real y = 0; Real z = 0; Real vel = 0;
 
     khat_x = 1.0; khat_y = 0.0; khat_z = 0.0; // k_hat along x direction
     bhat_x = 0; bhat_y = std::cos(b_tilt); bhat_z = std::sin(b_tilt); // b_hat in y-z plane
@@ -370,7 +379,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       }
     }
     break;}
-    case 2:{
+    case 2: {
     // ---- frozen-flow field test: Ohmic, ambipolar and Hall, in any combination ----
     // Background B0 = B0_mag (cos theta, sin theta, 0), theta = 30 deg to k = K x-hat
     // perturbation dB cos(Kx) z-hat
@@ -378,7 +387,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
     bhat_x = std::cos(theta);  bhat_y = std::sin(theta);  bhat_z = 0.0;
     kx   = 2.0*PI/(xmax - xmin); // one wavelength in x
-    dB_amp = 1.0e-6*B0_mag;
+    dB_amp = 1.0e-6;
 
     if (B0_mag == 0.0) {
       std::stringstream msg;
@@ -387,43 +396,44 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       ATHENA_ERROR(msg);
     }
 
-    for (int k = ks; k <= ke; k++ ) {
-      for (int j = js; j <= je; j++ ) {
-        for (int i = is; i <= ie; i++ ) {
-          Real b3 = dB_amp*std::cos(kx*this->pcoord->x1v(i));
-          phydro->u(IDN,k,j,i) = rho_0;
-          phydro->u(IM1,k,j,i) = 0.0;
-          phydro->u(IM2,k,j,i) = 0.0;
-          phydro->u(IM3,k,j,i) = 0.0;
-          phydro->u(IEN,k,j,i) = B_energy + 0.5*b3*b3;
+        for (int k = ks; k <= ke; k++ ) {
+            for (int j = js; j <= je; j++ ) {
+                for (int i = is; i <= ie; i++ ) {
+                    Real b3 = dB_amp*std::cos(kx*this->pcoord->x1v(i));
+                    phydro->u(IDN,k,j,i) = rho_0;
+                    phydro->u(IM1,k,j,i) = 0.0;
+                    phydro->u(IM2,k,j,i) = 0.0;
+                    phydro->u(IM3,k,j,i) = 0.0;
+                    phydro->u(IEN,k,j,i) = P_0/gm1 + B_energy + 0.5*b3*b3;
+                }
+            }
         }
-      }
-    }
-    for (int k = ks; k <= ke; k++ )
-      for (int j = js; j <= je; j++ )
-        for (int i = is; i <= ie+1; i++ )
-          pfield->b.x1f(k,j,i) = B0_mag*bhat_x;
-    for (int k = ks; k <= ke; k++ )
-      for (int j = js; j <= je+1; j++ )
-        for (int i = is; i <= ie; i++ )
-          pfield->b.x2f(k,j,i) = B0_mag*bhat_y;
-    for (int k = ks; k <= ke+1; k++ )
-      for (int j = js; j <= je; j++ )
-        for (int i = is; i <= ie; i++ )
-          pfield->b.x3f(k,j,i) = dB_amp*std::cos(kx*this->pcoord->x1v(i));
-    break;}
-    case 3:{
-      // ---- frozen-flow thermoelectric mode: neutral+perp conduction, Ohmic+ambipolar, Nernst-Ettingshausen ----
-      // Background B0 = B0_mag y-hat, perpendicular to k = K x-hat
-      // Perturbations: cos(Kx). dT, dB_y along b (its current crosses b)
-      // kappa_par, Righi-Leduc, Hall and Peltier-Seebeck all drop out at
-      // k perpendicular to b. well-posed when D_T D_B > c_TB c_BT.
-      const Real T0 = P_0/rho_0;
-      B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
-      bhat_x = 0.0;  bhat_y = 1.0;  bhat_z = 0.0;  // b perpendicular to k
-      kx   = 2.0*PI/(xmax - xmin);         // one wavelength in x
-      const Real dT_amp = 1.0e-6*T0;
-      const Real dB_amp = 1.0e-6*B0_mag;
+        for (int k = ks; k <= ke; k++ )
+            for (int j = js; j <= je; j++ )
+                for (int i = is; i <= ie+1; i++ )
+                    pfield->b.x1f(k,j,i) = B0_mag*bhat_x;
+        for (int k = ks; k <= ke; k++ )
+            for (int j = js; j <= je+1; j++ )
+                for (int i = is; i <= ie; i++ )
+                    pfield->b.x2f(k,j,i) = B0_mag*bhat_y;
+        for (int k = ks; k <= ke+1; k++ )
+            for (int j = js; j <= je; j++ )
+                for (int i = is; i <= ie; i++ )
+                    pfield->b.x3f(k,j,i) = dB_amp*std::cos(kx*this->pcoord->x1v(i));
+        break;}
+        case 3: {
+          // ---- thermoelectric mode: Nernst-Ettingshausen ----
+          //                          +(neutral+perp conduction, Ohmic+ambipolar)
+          // Background B0 = B0_mag y-hat, perpendicular to k = K x-hat
+          // Perturbations: cos(Kx). dT, dB_y along b
+          // kappa_par, Righi-Leduc, Hall and Peltier-Seebeck all drop out at
+          // k perpendicular to b. well-posed when D_T D_B > c_TB c_BT.
+          const Real T0 = P_0/rho_0;
+          B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
+          bhat_x = 0.0;  bhat_y = 1.0;  bhat_z = 0.0;
+          kx     = 2.0*PI/(xmax - xmin);
+          const Real dT_amp = 1.0e-6;
+          const Real dB_amp = 1.0e-6;
 
       if (B0_mag == 0.0) {
         std::stringstream msg;
@@ -432,145 +442,131 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         ATHENA_ERROR(msg);
       }
 
-      for (int kk = ks; kk <= ke; kk++ ) {
-        for (int j = js; j <= je; j++ ) {
-          for (int i = is; i <= ie; i++ ) {
-            Real c  = std::cos(kx*this->pcoord->x1v(i));
-            Real Tc = T0 + dT_amp*c;
-            Real by = B0_mag + dB_amp*c;
-            Real bz = dB_amp*c;
-            phydro->u(IDN,kk,j,i) = rho_0; // uniform density, so dP = rho_0 dT
-            phydro->u(IM1,kk,j,i) = 0.0;
-            phydro->u(IM2,kk,j,i) = 0.0;
-            phydro->u(IM3,kk,j,i) = 0.0;
-            phydro->u(IEN,kk,j,i) = rho_0*Tc/gm1 + 0.5*(SQR(by) + SQR(bz));
+          for (int kk = ks; kk <= ke; kk++ ) {
+              for (int j = js; j <= je; j++ ) {
+                  for (int i = is; i <= ie; i++ ) {
+                      Real c  = std::cos(kx*this->pcoord->x1v(i));
+                      Real Tc = T0 + dT_amp*c;
+                      Real by = B0_mag + dB_amp*c;
+                      phydro->u(IDN,kk,j,i) = rho_0; // uniform density
+                      phydro->u(IM1,kk,j,i) = 0.0;
+                      phydro->u(IM2,kk,j,i) = 0.0;
+                      phydro->u(IM3,kk,j,i) = 0.0;
+                      phydro->u(IEN,kk,j,i) = rho_0*Tc/gm1 + 0.5*SQR(by);
+                  }
+              }
           }
-        }
-      }
-      for (int k = ks; k <= ke; k++ )
-        for (int j = js; j <= je; j++ )
-          for (int i = is; i <= ie+1; i++ )
-            pfield->b.x1f(k,j,i) = 0.0;
-      for (int k = ks; k <= ke; k++ )
-        for (int j = js; j <= je+1; j++ )
-          for (int i = is; i <= ie; i++ )
-            pfield->b.x2f(k,j,i) = B0_mag
-                       + dB_amp*std::cos(kx*this->pcoord->x1v(i));
-      for (int k = ks; k <= ke+1; k++ )
-        for (int j = js; j <= je; j++ )
-          for (int i = is; i <= ie; i++ )
-            pfield->b.x3f(k,j,i) = 0.0;
-      break;}
-    case 4:{ // --- Righi-Leduc: Beltrami field + transverse T gradient ---
-      // b = (cos kBz, sin kBz, 0): curl b = -kB b, torsion -kB, curvature 0.
-      // Exact solution for the RL operator alone (rho, kappa_w const):
-      // T(x,z,t) = T_init(x - (gamma-1)*kappa_w*kB*cos(kB z)*t, z)
-      // div(curl b) = 0, advection is incompressible.
-      // int T^2 dV is conserved.
-      Real T_0  = P_0/rho_0;
-      Real A_T  = pin->GetOrAddReal("problem","rl_amp_T", 1.0e-3);
-      Real A_B  = pin->GetOrAddReal("problem","rl_amp_B", 0.0);
-      Real v0   = pin->GetOrAddReal("problem","rl_amp_v", 0.0);
-      Real nturn  = pin->GetOrAddReal("problem","rl_turns", 1.0);
-      Real Lx   = xmax - xmin;
-      Real Lz   = zmax - zmin;
-      Real kB   = 2.0*PI*nturn/Lz;
-      Real kT   = 2.0*PI/Lx;
-      Real B0   = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
+          for (int k = ks; k <= ke; k++ )
+              for (int j = js; j <= je; j++ )
+                  for (int i = is; i <= ie+1; i++ )
+                      pfield->b.x1f(k,j,i) = 0.0;
+          for (int k = ks; k <= ke; k++ )
+              for (int j = js; j <= je+1; j++ )
+                  for (int i = is; i <= ie; i++ )
+                      pfield->b.x2f(k,j,i) = B0_mag
+                                           + dB_amp*std::cos(kx*this->pcoord->x1v(i));
+          for (int k = ks; k <= ke+1; k++ )
+              for (int j = js; j <= je; j++ )
+                  for (int i = is; i <= ie; i++ )
+                      pfield->b.x3f(k,j,i) = 0.0;
+          break;}
+        case 4: {
+          // ---- Righi-Leduc: Beltrami field, temperature mode across it ----
+          // B = (cos kB z, sin kB z, 0) with |B| = B0_mag: curl B = -kB b,
+          //T = T_0 + dT cos(kx x).
+          const Real T0 = P_0/rho_0;
+          B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
+          kx     = 2.0*PI/(xmax - xmin);
+          kB     = 2.0*PI/(zmax - zmin);
+          const Real dT_amp = 1.0e-6;
 
-      if (A_B >= 1.0) {
+      if (B0_mag == 0.0) {
         std::stringstream msg;
         msg << "### FATAL ERROR in ProblemGenerator case 4" << std::endl
-          << "rl_amp_B must be < 1 or the field reverses" << std::endl;
+            << "needs a nonzero background field (the input sets its magnitude)"
+            << std::endl;
         ATHENA_ERROR(msg);
       }
 
-      // Field: g depends on z only, so div(B) = 0 discretely for any g.
-      for (int k = ks; k <= ke+1; k++) {
-        Real z = this->pcoord->x3v(k);
-        Real g = 1.0 - A_B*std::sin(kB*z);
-        for (int j = js; j <= je+1; j++) {
-          for (int i = is; i <= ie+1; i++) {
-            pfield->b.x1f(k,j,i) = B0*g*std::cos(kB*z);
-            pfield->b.x2f(k,j,i) = B0*g*std::sin(kB*z);
-            pfield->b.x3f(k,j,i) = 0.0;
+          for (int kk = ks; kk <= ke; kk++ ) {
+              for (int j = js; j <= je; j++ ) {
+                  for (int i = is; i <= ie; i++ ) {
+                      Real Tc = T0 + dT_amp*std::cos(kx*this->pcoord->x1v(i));
+                      phydro->u(IDN,kk,j,i) = rho_0; // uniform density
+                      phydro->u(IM1,kk,j,i) = 0.0;
+                      phydro->u(IM2,kk,j,i) = 0.0;
+                      phydro->u(IM3,kk,j,i) = 0.0;
+                      phydro->u(IEN,kk,j,i) = rho_0*Tc/gm1 + 0.5*SQR(B0_mag);
+                  }
+              }
           }
-        }
-      }
-      for (int k = ks; k <= ke; k++) {
-        Real z = this->pcoord->x3v(k);
-        Real g = 1.0 - A_B*std::sin(kB*z);
-        for (int j = js; j <= je; j++) {
-          for (int i = is; i <= ie; i++) {
-            Real x  = this->pcoord->x1v(i);
-            Real T_local = T_0*(1.0 + A_T*std::sin(kT*x));
-            Real vy = v0*std::sin(kT*x);
-            phydro->u(IDN,k,j,i) = P_0/T_local;
-            phydro->u(IM1,k,j,i) = 0.0;
-            phydro->u(IM2,k,j,i) = rho_0*vy;
-            phydro->u(IM3,k,j,i) = 0.0;
-            phydro->u(IEN,k,j,i) = P_0/gm1 + 0.5*rho_0*vy*vy + 0.5*SQR(B0*g);
-          }
-        }
-      }
-      break;}
-     case 5:{
-      // ---- frozen-flow gyroviscosity: Pi3 across the field, Pi4 along it ----
-      // B0 = B0_mag z-hat, rho = rho_0
-      // Two velocity modes, both perpendicular to b:
-      // vx = v0 sin(kz z), vy = v0 sin(kx x), vz = 0
-      // solution:
-      // vx = v0 (-sin(HII*nw1*k_x^2*t) sin(kx*x) + sin(kz*z) cos(2*HII*nw1*kz^2*t))
-      // vy = v0 (sin(2*HII*nw2*kz^2*t) sin(kz*z) + sin(kx*x) cos(HII*nw1*kx^2*t))
-      // vz = 0
-      B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
-      kx = 2.0*PI/(xmax - xmin);  // across-b wavenumber
-      kz = 2.0*PI/(zmax - zmin);  // along-b wavenumber (file scope)
-      v0 = pin->GetOrAddReal("problem","visc_amp", 1.0e-6);
+          for (int k = ks; k <= ke; k++ )
+              for (int j = js; j <= je; j++ )
+                  for (int i = is; i <= ie+1; i++ )
+                      pfield->b.x1f(k,j,i) = B0_mag*std::cos(kB*this->pcoord->x3v(k));
+          for (int k = ks; k <= ke; k++ )
+              for (int j = js; j <= je+1; j++ )
+                  for (int i = is; i <= ie; i++ )
+                      pfield->b.x2f(k,j,i) = B0_mag*std::sin(kB*this->pcoord->x3v(k));
+          for (int k = ks; k <= ke+1; k++ )
+              for (int j = js; j <= je; j++ )
+                  for (int i = is; i <= ie; i++ )
+                      pfield->b.x3f(k,j,i) = 0.0;
+          break;}
+        case 5: {
+          // ---- Gyro-viscosity: Pi3 across the field, Pi4 along it ----
+          // B0 = B0_mag z-hat, rho = rho_0;
+          // Two velocity modes, both perpendicular to b:
+          //   across b (k = kx x-hat): v = (a_x, a_y, 0) sin(kx x)
+          //   along b  (k = kz z-hat): v = (c_x, c_y, 0) sin(kz z)
+          // Pi4 does nothing to the first mode and Pi3 nothing to the second.
+          B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
+          kx = 2.0*PI/(xmax - xmin);                              // across-b wavenumber
+          kz = 2.0*PI/(zmax - zmin);                              // along-b wavenumber
+          v0 = pin->GetOrAddReal("problem","visc_amp", 1.0e-6);
 
       if (B0_mag == 0.0) {
         std::stringstream msg;
         msg << "### FATAL ERROR in ProblemGenerator case 5" << std::endl
-          << "needs a nonzero background field (the input sets its magnitude)"
-          << std::endl;
+          << "needs a nonzero background field (the input sets its magnitude)" << std::endl;
         ATHENA_ERROR(msg);
       }
 
-      for (int kk = ks; kk <= ke; kk++ ) {
-        for (int j = js; j <= je; j++ ) {
-          for (int i = is; i <= ie; i++ ) {
-            Real vx = v0*std::sin(kz*this->pcoord->x3v(kk)); // along-b mode
-            Real vy = v0*std::sin(kx*this->pcoord->x1v(i));  // across-b mode
-            phydro->u(IDN,kk,j,i) = rho_0;
-            phydro->u(IM1,kk,j,i) = rho_0*vx;
-            phydro->u(IM2,kk,j,i) = rho_0*vy;
-            phydro->u(IM3,kk,j,i) = 0.0;
-            phydro->u(IEN,kk,j,i) = P_0/gm1 + 0.5*SQR(B0_mag)
-                        + 0.5*rho_0*(vx*vx + vy*vy);
+          for (int kk = ks; kk <= ke; kk++ ) {
+              for (int j = js; j <= je; j++ ) {
+                  for (int i = is; i <= ie; i++ ) {
+                      Real vx = v0*std::sin(kz*this->pcoord->x3v(kk)); // along-b mode starts along x
+                      Real vy = v0*std::sin(kx*this->pcoord->x1v(i));  // across-b mode starts along y
+                      phydro->u(IDN,kk,j,i) = rho_0;
+                      phydro->u(IM1,kk,j,i) = rho_0*vx;
+                      phydro->u(IM2,kk,j,i) = rho_0*vy;
+                      phydro->u(IM3,kk,j,i) = 0.0;
+                      phydro->u(IEN,kk,j,i) = P_0/gm1 + 0.5*SQR(B0_mag) + 0.5*rho_0*(vx*vx + vy*vy);
+                  }
+              }
           }
-        }
-      }
-      for (int k = ks; k <= ke; k++ )
-        for (int j = js; j <= je; j++ )
-          for (int i = is; i <= ie+1; i++ )
-            pfield->b.x1f(k,j,i) = 0.0;
-      for (int k = ks; k <= ke; k++ )
-        for (int j = js; j <= je+1; j++ )
-          for (int i = is; i <= ie; i++ )
-            pfield->b.x2f(k,j,i) = 0.0;
-      for (int k = ks; k <= ke+1; k++ )
-        for (int j = js; j <= je; j++ )
-          for (int i = is; i <= ie; i++ )
-            pfield->b.x3f(k,j,i) = B0_mag;
-      break;}
-    case 6: {
-        // ---- (T, rho, |B|) sweep for the timestep check ----
-        // x -> T,  y -> rho,  z -> |B|.  Log-spaced about the base state.
-        // Run single-block with time/nlim=0.
-        // Run with uniform cartesian grid
-        Real dx = pcoord->dx1f(1);
-        Real T_0 = P_0/rho_0;
-        Real B_0 = std::abs(Bx_0);
+          // uniform field along z: the discrete divergence is exactly zero
+          for (int k = ks; k <= ke; k++ )
+              for (int j = js; j <= je; j++ )
+                  for (int i = is; i <= ie+1; i++ )
+                      pfield->b.x1f(k,j,i) = 0.0;
+          for (int k = ks; k <= ke; k++ )
+              for (int j = js; j <= je+1; j++ )
+                  for (int i = is; i <= ie; i++ )
+                      pfield->b.x2f(k,j,i) = 0.0;
+          for (int k = ks; k <= ke+1; k++ )
+              for (int j = js; j <= je; j++ )
+                  for (int i = is; i <= ie; i++ )
+                      pfield->b.x3f(k,j,i) = B0_mag;
+          break;}
+        case 8: {
+                // ---- (T, rho, |B|) sweep for the timestep check ----
+                // x -> T,  y -> rho,  z -> |B|.  Log-spaced about the base state.
+                // Run single-block with time/nlim=0.
+                // Run with uniform cartesian grid
+                Real dx = pcoord->dx1f(1);
+                Real T_0 = P_0/rho_0;
+                Real B_0 = std::abs(Bx_0);
 
         int nT = ie - is + 1, nR = je - js + 1, nB = ke - ks + 1;
         AthenaArray<Real> Tg, Rg, Bg;
@@ -603,12 +599,14 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       break;}
   default:
     std::cout << "ERROR. Problem_ID can be: \n"
-    << "0 - temperature gradient (thermal conduction, Peltier/Seebeck (+Hall)), \n "
+    << "0 - temperature mode (thermal conduction), \n "
     << "1 - velocity Fourier mode (viscoisty), \n"
     << "2 - MHD wave (Ohmic + ambi, Hall effect), \n"
     << "3 - TE eigenmode (Nernst-Ettingshausen) \n"
-    << "4 - Righi-Leduc: Beltrami field + transverse T gradient \n"
-    << "5 - Timestep checks \n";
+    << "4 - Righi-Leduc: Beltrami field + transverse T mode \n"
+    << "5 - Gyroviscosity: Pi3 across b, Pi4 along b \n"
+    << "6 - Peltier-Seebeck (+ Hall) \n"
+    << "7 - Timestep checks \n";
     exit(-1);
   }
 
@@ -688,7 +686,7 @@ void MeshBlock::UserWorkBeforeOutput(ParameterInput *pin) {
   GetTemperature(this);
   GetWaveSpeeds(this);
   if(problem_ID==3)CalculateWellPosedness(this);
-  //if(problem_ID==5) GetTimeSteps(this);
+  //if(problem_ID==7) GetTimeSteps(this);
 
   return;
 }
@@ -1194,8 +1192,8 @@ void CalculateMagDiff(FieldDiffusion *pfdif, MeshBlock *pmb,
       fdif.etaB(fdif.ambipolar,k,j,i) = eta_ad;
       fdif.etaB(fdif.hall,k,j,i) = eta_h;
       fdif.thermKappa(fdif.kappa_TE_para,k,j,i) = kj_para;
-      fdif.thermKappa(fdif.kappa_TE_para,k,j,i) = kj_perp;
-      fdif.thermKappa(fdif.kappa_TE_para,k,j,i) = kj_wedge;
+      fdif.thermKappa(fdif.kappa_TE_perp,k,j,i) = kj_perp;
+      fdif.thermKappa(fdif.kappa_TE_wedge,k,j,i) = kj_wedge;
       }
     }
   }
@@ -1213,19 +1211,19 @@ void CalculateWellPosedness(MeshBlock *pmb) {
   for (int k = ks; k <= ke; k++) {
     for (int j = js; j <= je; j++) {
       for (int i = is; i <= ie; i++) {
-        Real HII = pmb->phydro->hdif.ion_frac(k,j,i);
+        Real HII = (pmb->phydro->hdif.kappa_aniso_neutral > 0.0)
+                 ? pmb->phydro->hdif.ion_frac(k,j,i) : 1.0;
         Real kn = pmb->phydro->hdif.kappa(HydroDiffusion::kappa_neutral,k,j,i);
         Real kp = pmb->phydro->hdif.kappa(HydroDiffusion::kappa_perp,k,j,i);
         Real eta_o = pmb->pfield->fdif.etaB(FieldDiffusion::ohmic,k,j,i);
-        Real eta_a = pmb->pfield->fdif.etaB(FieldDiffusion::ambipolar,k,j,i)*
-                (pmb->pfield->bcc(IB1,k,j,i)*pmb->pfield->bcc(IB1,k,j,i)
-                 + pmb->pfield->bcc(IB2,k,j,i)*pmb->pfield->bcc(IB2,k,j,i)
-                 + pmb->pfield->bcc(IB3,k,j,i)*pmb->pfield->bcc(IB3,k,j,i));
+        Real eta_a = pmb->pfield->fdif.etaB(FieldDiffusion::ambipolar,k,j,i); // already eta_ad |B|^2
         Real kjw = pmb->pfield->fdif.thermKappa(FieldDiffusion::ThermElecProcess::
                             kappa_TE_wedge,k,j,i);
 
-        Real wp = gm1*((1-HII)*kn + HII*kp)*(eta_o+eta_a) /
-              kjw*kjw*HII*HII/pmb->phydro->w(IEN,k,j,i)/gm1;
+        Real eps_int = pmb->phydro->w(IPR,k,j,i)/gm1;
+        Real cc = SQR(HII*kjw)/eps_int;                     // c_TB c_BT
+        // D_T D_B/(c_TB c_BT): well-posed when > 1
+        Real wp = (cc > 0.0) ? gm1*((1-HII)*kn + HII*kp)*(eta_o+eta_a)/cc : HUGE_NUMBER;
         pmb->user_out_var(out_WP,k,j,i) = wp;
 
       }
@@ -1239,6 +1237,8 @@ void CalculateWellPosedness(MeshBlock *pmb) {
 Real TETimeStep(MeshBlock *pmb) {
   return 1e-4;
 }
+
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void TemperatureErrors
@@ -1254,82 +1254,99 @@ void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
 
   Real amp = 0.0; // case 0: mode amplitude
   switch (problem_ID) {
-    case 0:{ // ---- single thermal mode: frozen-flow (isochoric) decay ----
+    case 0: { // ---- single thermal mode: frozen-flow (isochoric) decay ----
       // T(r,t) = T_0*(1 + A_T*exp(-rate*t)*cos(k.x)), rate = (gamma-1)*kappa*k^2.
       Real k2 = kx*kx + ky*ky + kz*kz;
       Real B0 = std::sqrt(Bx_0*Bx_0 + By_0*By_0 + Bz_0*Bz_0);
       Real K_par = (B0 > 0.0) ? (kx*Bx_0 + ky*By_0 + kz*Bz_0)/B0 : 0.0; // k.b_hat
-      Real HII = (kappa_neu > 0.0) ? ion_frac : 1.0; // as in ThermalFluxAniso
+      Real HII = (kappa_neu > 0.0) ? ion_frac : 1.0;
       Real rate = gm1*((1.0 - HII)*kappa_neu*k2
             + HII*(kappa_para*SQR(K_par) + kappa_perp*(k2 - SQR(K_par))));
       amp = A_T*std::exp(-rate*t);
-      break;
 
-  for (int k = ks; k <= ke; k++) {
-    for (int j = js; j <= je; j++) {
-      for (int i = is; i <= ie; i++) {
-        Real T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
-        Real T_ana = 0.0;
-        switch (problem_ID) {
-          case 0:
-            T_ana = T_0*(1.0 + amp*std::cos(kx*pco->x1v(i) + ky*pco->x2v(j)
-                            + kz*pco->x3v(k)));
-            break;
+    for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+                Real T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
+                Real T_ana = T_0*(1.0 + amp*std::cos(kx*pco->x1v(i) + ky*pco->x2v(j)
+                           + kz*pco->x3v(k)));
+                Real err = std::abs(T_sim - T_ana);
+                Real dV = pco->GetCellVolume(k,j,i);
+                l1 += err*dV;
+                l2sq += err*err*dV;
+                linf = std::max(linf, err);
+            }
+          }
         }
-        Real err = std::abs(T_sim - T_ana);
-        Real dV = pco->GetCellVolume(k,j,i);
-        l1 += err*dV;
-        l2sq += err*err*dV;
-        linf = std::max(linf, err);
-      }
-      }
-    }
-    }
-  case 3:{
-    const Real T0   = P_0/rho_0;
-    const Real dT_amp = 1.0e-6*T0;
-    const Real dB_amp = 1.0e-6*B0_mag;
-    const Real HII  = (kappa_neu > 0.0) ? ion_frac : 1.0;
-    const Real DT   = gm1*((1.0 - HII)*kappa_neu + HII*kappa_perp); // kapa_eff
-    const Real DB   = eta_o + eta_ad;                 // eta_eff
-    const Real cTB  = gm1*HII*kappa_TE_wedge/rho_0;         // Ettingshausen
-    const Real cBT  = HII*kappa_TE_wedge/T0;            // Nernst
-    const Real abar = 0.5*(DT + DB);                // mean rate
-    const Real del  = 0.5*(DT - DB);                // half-difference
-    const Real D2   = del*del + cTB*cBT;              // D^2 >= 0
-    const Real tau  = kx*kx*t;
-    const Real q  = D2*tau*tau;
+      break;}
+    case 3: {
+      Real T0   = P_0/rho_0;
+      Real dT_amp = 1.0e-6;
+      Real dB_amp = 1.0e-6;
+      Real HII  = (kappa_neu > 0.0) ? ion_frac : 1.0;
+      Real DT   = gm1*((1.0 - HII)*kappa_neu + HII*kappa_perp); // kapa_eff
+      Real DB   = eta_o + eta_ad*SQR(B0_mag);                               // eta_eff
+      Real cTB  = gm1*HII*kappa_TE_wedge/rho_0;                 // Ettingshausen
+      Real cBT  = HII*kappa_TE_wedge/T0;                        // Nernst
+      Real abar = 0.5*(DT + DB);                                // mean rate
+      Real del  = 0.5*(DT - DB);                                // half-difference
+      Real D2   = del*del + cTB*cBT;                            // D^2 >= 0
+      Real tau  = kx*kx*t;
+      Real q    = D2*tau*tau;
 
     Real EC = 0.0; Real ES = 0.0; // e^{-a tau} cosh(D tau), e^{-a tau} sinh(D tau)/D
     if (q < 1.0e-4) {       // Taylor series in D^2: no 0/0 at D = 0
-    const Real decay = std::exp(-abar*tau);
+    Real decay = std::exp(-abar*tau);
     EC = decay*(1.0 + q/2.0 + q*q/24.0);
     ES = decay*tau*(1.0 + q/6.0 + q*q/120.0);
     } else {                   // D real, combine exponents first
-    const Real D  = std::sqrt(D2);
-    const Real ep = std::exp(-(abar - D)*tau); // grows when ill-posed (abar < D)
-    const Real em = std::exp(-(abar + D)*tau);
+    Real D  = std::sqrt(D2);
+    Real ep = std::exp(-(abar - D)*tau); // grows when ill-posed (abar < D)
+    Real em = std::exp(-(abar + D)*tau);
     EC = 0.5*(ep + em);
     ES = 0.5*(ep - em)/D;
     }
-    const Real AT  = dT_amp*(EC - del*ES) - dB_amp*cTB*ES;
+    Real AT  = dT_amp*(EC - del*ES) - dB_amp*cTB*ES;
 
-    for (int k = ks; k <= ke; k++) {
-    for (int j = js; j <= je; j++) {
-      for (int i = is; i <= ie; i++) {
-      Real cx  = std::cos(kx*pco->x1v(i));
-      Real Tn  = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
-      Real err = std::abs(Tn - (T0 + AT*cx));
-      Real dV  = pco->GetCellVolume(k,j,i);
-      l1   += err*dV;
-      l2sq += err*err*dV;
-      linf  = std::max(linf, err);
+      for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+          for (int i = is; i <= ie; i++) {
+            Real cx  = std::cos(kx*pco->x1v(i));
+            Real Tn  = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
+            Real err = std::abs(Tn - (T0 + AT*cx));
+            Real dV  = pco->GetCellVolume(k,j,i);
+            l1   += err*dV;
+            l2sq += err*err*dV;
+            linf  = std::max(linf, err);
+          }
+        }
       }
+      break;
     }
+    case 4: { // ---- frozen-flow Righi-Leduc: each z-layer advects rigidly ----
+      // T = T_0 + dT0 cos(kx (x - U cos(kB z) t)),  U = (gamma-1) x kappa_wedge kB
+      Real T0     = P_0/rho_0;
+      Real dT_amp = 1.0e-6;
+      Real HII    = (kappa_neu > 0.0) ? ion_frac : 1.0; // ion weighting, as in the solver
+      Real U      = gm1*HII*kappa_wedge*kB;             // Righi-Leduc advection speed
+      for (int k = ks; k <= ke; k++) {
+        Real bx = std::cos(kB*pco->x3v(k));
+        for (int j = js; j <= je; j++) {
+          for (int i = is; i <= ie; i++) {
+            Real Ta  = T0 + dT_amp*std::cos(kx*(pco->x1v(i) - U*bx*t));
+            Real Tn  = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
+            Real err = std::abs(Tn - Ta);
+            Real dV  = pco->GetCellVolume(k,j,i);
+            l1   += err*dV;
+            l2sq += err*err*dV;
+            linf  = std::max(linf, err);
+          }
+        }
+      }
+      break;
     }
-  }
-  default:
-    break;
+    default:
+      break;
   }
   return;
 }
@@ -1338,15 +1355,6 @@ void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
 //! \fn void VelocityErrors
 //! \brief Velocity errors e = |v_sim - v_ana| on this MeshBlock:
 //  l1 = sum e dV, l2sq = sum e^2 dV, linf = max e.
-//  v(r,0) = v0*sin(k.x)*exp(-k^2*nu*t)*(A1 k_hat + A2 b_hat + A3 k_hat x b_hat)
-//  vx(r,t) = v0*A1(0)exp(-(kx^2 t)*nu_comp)sin(kx x)
-//  vy(r,t) = v0*(a2(0)*exp(-(kx^2 t)*nu_sheary)*cos(theta)
-//        a3(0)*exp(-(kx^2 t)*nu_shearz)*sin(theta))*sin(kx x)
-//  vz(r,t) = v0*(a2(0)*exp(-(kx^2 t)*nu_sheary)*sin(theta)
-//        a3(0)*exp(-(kx^2 t)*nu_shearz)*cos(theta))*sin(kx x)
-// nu_comp = zeta_bulk/rho_0 + (4/3)*nu_neu*(1-HII) + HII*(nu_para/3 + nu_perp1)
-// nu_sheary = (1-HII)*nu_neu + 4*HII*nu_perp2
-// nu_shearz = (1-HII)*nu_neu +   HII*nu_perp1
 void VelocityErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
   l1 = 0.0; l2sq = 0.0; linf = 0.0;
 
@@ -1357,7 +1365,17 @@ void VelocityErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
 
   Real ev_x = 0.0; Real ev_y = 0.0; Real ev_z = 0.0; // case 1: damped mode vector
   switch (problem_ID) {
-    case 1:{ // ---- single velocity mode: viscosity ----
+    //  v(r,0) = v0*sin(k.x)*exp(-k^2*nu*t)*(A1 k_hat + A2 b_hat + A3 k_hat x b_hat)
+    //  vx(r,t) = v0*A1(0)exp(-(kx^2 t)*nu_comp)sin(kx x)
+    //  vy(r,t) = v0*(a2(0)*exp(-(kx^2 t)*nu_sheary)*cos(theta)
+    //        a3(0)*exp(-(kx^2 t)*nu_shearz)*sin(theta))*sin(kx x)
+    //  vz(r,t) = v0*(a2(0)*exp(-(kx^2 t)*nu_sheary)*sin(theta)
+    //        a3(0)*exp(-(kx^2 t)*nu_shearz)*cos(theta))*sin(kx x)
+    // nu_comp = zeta_bulk/rho_0 + (4/3)*nu_neu*(1-HII) + HII*(nu_para/3 + nu_perp1)
+    // nu_sheary = (1-HII)*nu_neu + 4*HII*nu_perp2
+    // nu_shearz = (1-HII)*nu_neu +   HII*nu_perp1
+    // Case 1 - Viscoisty
+    case 1: {
       Real k2 = kx*kx;
       Real HII = (nu_neu > 0.0) ? ion_frac : 1.0;
       Real M1 = zeta_bulk/rho_0 + (4.0/3.0)*(1.0 - HII)*nu_neu
@@ -1393,7 +1411,8 @@ void VelocityErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
       }
       break;
     }
-    case 5:{
+    // Case 5 - Gyro-viscoisty
+    case 5: {
       Real HII = (nu_neu > 0.0) ? ion_frac : 1.0;
       Real W3  = HII*nu_wedge1*kx*kx; // Pi3 rotation rate, k across b
       Real W4  = 2.0*HII*nu_wedge2*kz*kz; // Pi4 rotation rate, k along b
@@ -1420,6 +1439,118 @@ void VelocityErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
     default:
       return;
   }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void FieldErrors
+//! \brief Magnetic field errors e = |B_sim - B_ana| (cell-centred) on this MeshBlock:
+//!  l1 = sum e dV, l2sq = sum e^2 dV, linf = max e.
+//----------------------------------------------------------------------------------------
+void FieldErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
+  Coordinates *pco = pmb->pcoord;
+  int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
+  int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
+  Real t = pmb->pmy_mesh->time;
+  l1 = 0.0; l2sq = 0.0; linf = 0.0;
+
+  // case 2 - ohmic+ambi+Hall
+  if (problem_ID == 2) {
+    Real eta_a = eta_ad*SQR(B0_mag); // ambipolar diffusion coefficient
+    Real c  = bhat_x, s = bhat_y;
+    Real abar = eta_o + 0.5*eta_a*(1.0 + c*c); // mean damping / K^2
+    Real delA = 0.5*eta_a*s*s;         // ambipolar anisotropy / K^2
+    Real beta = eta_h*c;               // Hall rotation / K^2 (sign of k.b)
+    Real D2   = delA*delA - beta*beta; // D^2
+    Real tau  = kx*kx*t;
+    Real q  = D2*tau*tau;
+
+    Real EC, ES; // e^{-abar tau} cosh(D tau), e^{-abar tau} sinh(D tau)/D
+    if (std::abs(q) < 1.0e-4) { // Taylor series in D^2: no 0/0 at D = 0, limit is tau
+      Real decay = std::exp(-abar*tau);
+      EC = decay*(1.0 + q/2.0 + q*q/24.0);
+      ES = decay*tau*(1.0 + q/6.0 + q*q/120.0);
+    } else if (D2 > 0.0) { // ambipolar dominates: D real
+      Real D  = std::sqrt(D2);
+      Real ep = std::exp(-(abar - D)*tau);
+      Real em = std::exp(-(abar + D)*tau);
+      EC = 0.5*(ep + em);
+      ES = 0.5*(ep - em)/D;
+    } else {  // Hall dominates: D = i w
+      Real w   = std::sqrt(-D2);
+      Real decay = std::exp(-abar*tau);
+      EC = decay*std::cos(w*tau);
+      ES = decay*std::sin(w*tau)/w;
+    }
+    Real Ay = -dB_amp*beta*ES; // dBy
+    Real Az =  dB_amp*(EC + delA*ES); // dBz
+
+    for (int k = ks; k <= ke; k++) {
+      for (int j = js; j <= je; j++) {
+      for (int i = is; i <= ie; i++) {
+        Real cx  = std::cos(kx*pco->x1v(i));
+        Real dbx = std::abs(pmb->pfield->bcc(IB1,k,j,i) - B0_mag*bhat_x);
+        Real dby = std::abs(pmb->pfield->bcc(IB2,k,j,i) - (B0_mag*bhat_y + Ay*cx));
+        Real dbz = std::abs(pmb->pfield->bcc(IB3,k,j,i) - Az*cx);
+        Real err = std::sqrt(SQR(dbx) + SQR(dby) + SQR(dbz));
+        Real dV  = pco->GetCellVolume(k,j,i);
+        l1   += err*dV;
+        l2sq += err*err*dV;
+        linf  = std::max(linf, err);
+        }
+      }
+    }
+  }
+
+  // case 3 Nernst/Ettinghausen (needs perp conduction and ambi)
+  if (problem_ID == 3) {
+
+    Real T0   = P_0/rho_0;
+    Real dT_amp = 1.0e-6;
+    Real dB_amp = 1.0e-6;
+    Real HII  = (kappa_neu > 0.0) ? ion_frac : 1.0;
+    Real DT   = gm1*((1.0 - HII)*kappa_neu + HII*kappa_perp);
+    Real DB   = eta_o + eta_ad*SQR(B0_mag);
+    Real cTB  = gm1*HII*kappa_TE_wedge/rho_0;    // Ettingshausen
+    Real cBT  = HII*kappa_TE_wedge/T0;           // Nernst
+    Real abar = 0.5*(DT + DB);                   // mean rate / K^2
+    Real del  = 0.5*(DT - DB);                   // half-difference / K^2
+    Real D2   = del*del + cTB*cBT;               // D^2 >= 0
+    Real tau  = kx*kx*t;
+    Real q    = D2*tau*tau;                      // (D tau)^2
+
+  Real EC = 0.0; Real ES = 0.0; // e^{-a tau} cosh(D tau), e^{-a tau} sinh(D tau)/D
+  if (q < 1.0e-4) {  // Taylor series in D^2: no 0/0 at D = 0
+    Real decay = std::exp(-abar*tau);
+    EC = decay*(1.0 + q/2.0 + q*q/24.0);
+    ES = decay*tau*(1.0 + q/6.0 + q*q/120.0);
+  } else {                   // D real: combine exponents first
+    Real D  = std::sqrt(D2);
+    Real ep = std::exp(-(abar - D)*tau); // ill-posed (abar < D)
+    Real em = std::exp(-(abar + D)*tau);
+    EC = 0.5*(ep + em);
+    ES = 0.5*(ep - em)/D;
+  }
+
+  Real ABy = dB_amp*(EC + del*ES) - dT_amp*cBT*ES;
+
+  for (int k = ks; k <= ke; k++) {
+    for (int j = js; j <= je; j++) {
+      for (int i = is; i <= ie; i++) {
+        Real cx  = std::cos(kx*pco->x1v(i));
+        Real dbx = std::abs(0.0 - pmb->pfield->bcc(IB1,k,j,i));
+        Real dby = std::abs(pmb->pfield->bcc(IB2,k,j,i) - (B0_mag + ABy*cx));
+        Real dbz = std::abs(0.0-pmb->pfield->bcc(IB3,k,j,i));
+        Real err = std::sqrt(SQR(dbx) + SQR(dby) + SQR(dbz));
+        Real dV  = pco->GetCellVolume(k,j,i);
+        l1   += err*dV;
+        l2sq += err*err*dV;
+        linf  = std::max(linf, err);
+      }
+    }
+  }
+}
+
   return;
 }
 
@@ -1463,117 +1594,6 @@ Real VelocityLInf(MeshBlock *pmb, int iout) {
   Real l1, l2sq, linf;
   VelocityErrors(pmb, l1, l2sq, linf);
   return linf;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void FieldErrors
-//! \brief Magnetic field errors e = |B_sim - B_ana| (cell-centred) on this MeshBlock:
-//!  l1 = sum e dV, l2sq = sum e^2 dV, linf = max e.
-//----------------------------------------------------------------------------------------
-// Field error norms for case 2 (frozen flow)
-// dB_y = e^{-abar tau} [P_y cosh(D tau) + Q_y sinh(D tau)/D], P_y = 0,   Q_y = -beta dB0
-// dB_z = e^{-abar tau} [P_z cosh(D tau) + Q_z sinh(D tau)/D], P_z = dB0, Q_z = delA dB0
-void FieldErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
-  Coordinates *pco = pmb->pcoord;
-  int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
-  int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
-  const Real t = pmb->pmy_mesh->time;
-  l1 = 0.0; l2sq = 0.0; linf = 0.0;
-  if (problem_ID == 2) {
-
-  const Real eta_a = eta_ad*SQR(B0_mag);       // ambipolar diffusion coefficient
-  const Real c  = bhat_x, s = bhat_y;      // direction set in the pgen
-  const Real abar = eta_o + 0.5*eta_a*(1.0 + c*c); // mean damping / K^2
-  const Real delA = 0.5*eta_a*s*s;         // ambipolar anisotropy / K^2
-  const Real beta = eta_h*c;             // Hall rotation / K^2 (sign of k.b)
-  const Real D2   = delA*delA - beta*beta;     // D^2
-  const Real tau  = kx*kx*t;
-  const Real q  = D2*tau*tau;          // (D tau)^2
-
-  Real EC, ES; // e^{-abar tau} cosh(D tau), e^{-abar tau} sinh(D tau)/D
-  if (std::abs(q) < 1.0e-4) { // Taylor series in D^2: no 0/0 at D = 0, limit is tau
-    const Real decay = std::exp(-abar*tau);
-    EC = decay*(1.0 + q/2.0 + q*q/24.0);
-    ES = decay*tau*(1.0 + q/6.0 + q*q/120.0);
-  } else if (D2 > 0.0) { // ambipolar dominates: D real
-    const Real D  = std::sqrt(D2);
-    const Real ep = std::exp(-(abar - D)*tau);
-    const Real em = std::exp(-(abar + D)*tau);
-    EC = 0.5*(ep + em);
-    ES = 0.5*(ep - em)/D;
-  } else {  // Hall dominates: D = i w
-    const Real w   = std::sqrt(-D2);
-    const Real decay = std::exp(-abar*tau);
-    EC = decay*std::cos(w*tau);
-    ES = decay*std::sin(w*tau)/w;
-  }
-  const Real Ay = -dB_amp*beta*ES; // dBy
-  const Real Az =  dB_amp*(EC + delA*ES); // dBz
-
-  for (int k = ks; k <= ke; k++) {
-    for (int j = js; j <= je; j++) {
-    for (int i = is; i <= ie; i++) {
-      Real cx  = std::cos(kx*pco->x1v(i));
-      Real dbx = std::abs(pmb->pfield->bcc(IB1,k,j,i) - B0_mag*bhat_x);
-      Real dby = std::abs(pmb->pfield->bcc(IB2,k,j,i) - (B0_mag*bhat_y + Ay*cx));
-      Real dbz = std::abs(pmb->pfield->bcc(IB3,k,j,i) - Az*cx);
-      Real err = std::sqrt(SQR(dbx) + SQR(dby) + SQR(dbz));
-      Real dV  = pco->GetCellVolume(k,j,i);
-      l1   += err*dV;
-      l2sq += err*err*dV;
-      linf  = std::max(linf, err);
-    }
-    }
-  }
-  }
-  if (problem_ID == 3) {
-
-  const Real T0   = P_0/rho_0;
-  const Real dT_amp = 1.0e-6*T0;
-  const Real dB_amp = 1.0e-6*B0_mag;
-  const Real HII  = (kappa_neu > 0.0) ? ion_frac : 1.0;
-  const Real DT   = gm1*((1.0 - HII)*kappa_neu + HII*kappa_perp); // conduction
-  const Real DB   = eta_o + eta_ad; // magnetic diffusion
-  const Real cTB  = gm1*HII*kappa_TE_wedge/rho_0; // Ettingshausen
-  const Real cBT  = HII*kappa_TE_wedge/T0; // Nernst
-  const Real abar = 0.5*(DT + DB); // mean rate / K^2
-  const Real del  = 0.5*(DT - DB); // half-difference / K^2
-  const Real D2   = del*del + cTB*cBT; // D^2 >= 0
-  const Real tau  = kx*kx*t;
-  const Real q  = D2*tau*tau; // (D tau)^2
-
-  Real EC = 0.0; Real ES = 0.0; // e^{-a tau} cosh(D tau), e^{-a tau} sinh(D tau)/D
-  if (q < 1.0e-4) {  // Taylor series in D^2: no 0/0 at D = 0
-    const Real decay = std::exp(-abar*tau);
-    EC = decay*(1.0 + q/2.0 + q*q/24.0);
-    ES = decay*tau*(1.0 + q/6.0 + q*q/120.0);
-  } else {                   // D real: combine exponents first
-    const Real D  = std::sqrt(D2);
-    const Real ep = std::exp(-(abar - D)*tau); // grows when ill-posed (abar < D)
-    const Real em = std::exp(-(abar + D)*tau);
-    EC = 0.5*(ep + em);
-    ES = 0.5*(ep - em)/D;
-  }
-
-  const Real ABy = dB_amp*(EC + del*ES) - dT_amp*cBT*ES;
-
-  for (int k = ks; k <= ke; k++) {
-    for (int j = js; j <= je; j++) {
-      for (int i = is; i <= ie; i++) {
-        Real cx  = std::cos(kx*pco->x1v(i));
-        Real dbx = std::abs(0.0 - pmb->pfield->bcc(IB1,k,j,i));
-        Real dby = std::abs(pmb->pfield->bcc(IB2,k,j,i) - (B0_mag + ABy*cx));
-        Real dbz = std::abs(0.0-pmb->pfield->bcc(IB3,k,j,i));
-        Real err = std::sqrt(SQR(dbx) + SQR(dby) + SQR(dbz));
-        Real dV  = pco->GetCellVolume(k,j,i);
-        l1   += err*dV;
-        l2sq += err*err*dV;
-        linf  = std::max(linf, err);
-      }
-    }
-  }
-  }
-  return;
 }
 
 // L1 field error sum|B_sim-B_ana| dV for convergence tests
