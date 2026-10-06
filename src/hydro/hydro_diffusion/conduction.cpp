@@ -25,7 +25,7 @@
 
 // Used to prevent energy from cold cells flowing into hot cells due to discretisation
 // error with strong parallel conduction
-namespace ConductionLimiters{
+namespace ConductionLimiters {
   // Monotonized-central limiter: minmod(2a, 2b, (a+b)/2)
   inline Real LimiterMC(const Real a, const Real b) {
     if (a*b <= 0.0) return 0.0;
@@ -43,7 +43,7 @@ namespace ConductionLimiters{
                                 const Real up_L, const Real dn_L) {
     return LimiterMC(LimiterMC(up_R, dn_R), LimiterMC(up_L, dn_L));
   }
-  } // namespace
+} // namespace ConductionLimiters
 
 //---------------------------------------------------------------------------------------
 //! \fn void HydroDiffusion::ThermalFluxIso
@@ -348,7 +348,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
 
       // SH1: eq:17 & 18 limited transverse gradients for para/perp
       dTdx_t = dTdx; dTdz_t = dTdz;
-      if(lim_c){
+      if(lim_c) {
         // limited dT/dx
         dTdx_t = LimitedTransverse(
             ( (p(IPR,k,j,i+1)/p(IDN,k,j,i+1)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
@@ -483,7 +483,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
 
          // SH1: eq:17 & 18 limited transverse gradients for para/perp
          dTdx_t = dTdx; dTdy_t = dTdy;
-         if(lim_c){
+         if(lim_c) {
           dTdx_t = LimitedTransverse( // limited dT/dx
               ( (p(IPR,k,j,i+1)/p(IDN,k,j,i+1)) - (p(IPR,k,j,i)/p(IDN,k,j,i)) )
               /pco_->dx1v(i),

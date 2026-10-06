@@ -211,7 +211,7 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
       }
     }
 
-    Real av = a + sqrt(Groe)/dxf;
+    Real av = a + std::sqrt(Groe)/dxf;
 
     // L/R dispersive waves
 

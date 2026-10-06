@@ -23,7 +23,7 @@
 #endif
 
 // Used to prevent momentum flowing in the wrong direction
-namespace ViscosityLimiters{
+namespace ViscosityLimiters {
   // Monotonized-central limiter: minmod(2a, 2b, (a+b)/2)
   inline Real LimiterMC(const Real a, const Real b) {
     if (a*b <= 0.0) return 0.0;
@@ -39,7 +39,7 @@ namespace ViscosityLimiters{
                                 const Real up_L, const Real dn_L) {
     return LimiterMC(LimiterMC(up_R, dn_R), LimiterMC(up_L, dn_L));
   }
-  } // namespace
+  } // namespace ViscosityLimiters
 
 //----------------------------------------------------------------------------------------
 //! \fn void HydroDiffusion::ViscousFluxBulk
@@ -400,8 +400,8 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
       if (f2) {
         if (!f3) // 2D MHD limits
           jl = js-1, ju = je+1, kl = ks, ku = ke;
-      else // 3D MHD limits
-          jl = js-1, ju = je+1, kl = ks-1, ku = ke+1;
+        else // 3D MHD limits
+            jl = js-1, ju = je+1, kl = ks-1, ku = ke+1;
       }
     }
   for (int k=kl; k<=ku; ++k) {
@@ -491,7 +491,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
 
         // limited transverse derivatives (ZH1) for the dissipative stresses Pi0-Pi2;
         // metric terms are added after limiting
-        Real dvx_dy_t = dvx_dy; Real dvz_dy_t = dvz_dy;Real dvx_dz_t = dvx_dz;
+        Real dvx_dy_t = dvx_dy; Real dvz_dy_t = dvz_dy; Real dvx_dz_t = dvx_dz;
         Real dvy_dy_t = dvy_dy; Real dvy_dz_t = dvy_dz; Real dvz_dz_t = dvz_dz;
         if(lim_v) {
           dvx_dy_t =  !f2 ? 0.0 : LimitedTransverse(
@@ -879,7 +879,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
           // metric terms are added after limiting
           Real dvx_dx_t = dvx_dx; Real dvy_dx_t = dvy_dx; Real dvz_dx_t = dvz_dx;
           Real dvx_dz_t = dvx_dz; Real dvy_dz_t = dvy_dz; Real dvz_dz_t = dvz_dz;
-          if(lim_v){
+          if(lim_v) {
             dvx_dx_t = LimitedTransverse(
             (p_i(IM1,k,j,i+1) - p_i(IM1,k,j,i))/pco_->dx1v(i),
             (p_i(IM1,k,j,i) - p_i(IM1,k,j,i-1))/pco_->dx1v(i-1),

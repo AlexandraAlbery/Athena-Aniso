@@ -1,3 +1,22 @@
+//======================================================================================
+/* Athena++ astrophysical MHD code
+ * Copyright (C) 2014 James M. Stone  <jmstone@princeton.edu>
+ *
+ * This program is free software: you can redistribute and/or modify it under the terms
+ * of the GNU General Public License (GPL) as published by the Free Software Foundation,
+ * either version 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of GNU GPL in the file LICENSE included in the code
+ * distribution.  If not see <http://www.gnu.org/licenses/>.
+ *====================================================================================*/
+
+// C Headers
+#include <unistd.h>
+
 // C++ headers
 #include <algorithm>  // min, max
 #include <cmath>    // sqrt()
@@ -5,16 +24,15 @@
 #include <ios>
 #include <iostream>   // endl
 #include <random>
+#include <sstream>
 #include <stdexcept>  // runtime_error
 #include <string>   // c_str()
-#include <sstream>
 #include <vector>   // vector type
-#include <unistd.h>
-
 
 // Athena++ headers
 #include "../athena.hpp"
 #include "../athena_arrays.hpp"
+#include "../bvals/bvals.hpp"
 #include "../coordinates/coordinates.hpp"
 #include "../eos/eos.hpp"
 #include "../fft/athena_fft.hpp"
@@ -23,85 +41,82 @@
 #include "../globals.hpp"
 #include "../hydro/hydro.hpp"
 #include "../mesh/mesh.hpp"
+#include "../outputs/io_wrapper.hpp"
+#include "../outputs/outputs.hpp"
 #include "../parameter_input.hpp"
 #include "../reconstruct/reconstruction.hpp"
 #include "../scalars/scalars.hpp"
 #include "../utils/utils.hpp"
-#include "../bvals/bvals.hpp"
-#include "../outputs/outputs.hpp"
-#include "../outputs/io_wrapper.hpp"
 
 // INPUT FILE: ../../inputs/mhd/aniso-tests/athinput.aniso-tests
 
 // Global variables
 namespace{
-Real P_floor = 0; Real rho_floor = 0; Real nx1 = 0; Real nx2 = 0; Real nx3 = 0;
-Real xmin = 0; Real ymin = 0; Real zmin = 0.0;
-Real xmax = 0.0; Real ymax = 0.0; Real zmax = 0.0;
-Real CFL = 0; Real rho_0 = 0; Real P_0 = 0; Real Bx_0 = 0; Real By_0 = 0; Real Bz_0 = 0;
-Real vx_0 = 0; Real vy_0 = 0; Real vz_0 = 0; Real Gamma = 0; Real gm1 = 0;
-Real kappa_neu = 0; Real kappa_para = 0; Real kappa_perp = 0; Real kappa_wedge = 0;
-Real nu_neu = 0; Real nu_para = 0; Real nu_perp1 = 0; Real nu_perp2 = 0;
-Real nu_wedge1 = 0; Real nu_wedge2 = 0; Real zeta_bulk = 0; Real ion_frac= 0;
-Real eta_o = 0; Real eta_ad = 0; Real eta_h = 0;
-Real kappa_TE_para = 0; Real kappa_TE_perp = 0; Real kappa_TE_wedge = 0;
-bool debug_therm_conduct_only = false; bool debug_therm_force_only = false;
-int problem_ID = 0 ; // tracks which test to run. called in MeshBlock::UserMeshBlockData
+  Real P_floor = 0; Real rho_floor = 0; Real nx1 = 0; Real nx2 = 0; Real nx3 = 0;
+  Real xmin = 0; Real ymin = 0; Real zmin = 0.0;
+  Real xmax = 0.0; Real ymax = 0.0; Real zmax = 0.0;
+  Real CFL = 0; Real rho_0 = 0; Real P_0 = 0; Real Bx_0 = 0; Real By_0 = 0; Real Bz_0 = 0;
+  Real vx_0 = 0; Real vy_0 = 0; Real vz_0 = 0; Real Gamma = 0; Real gm1 = 0;
+  Real kappa_neu = 0; Real kappa_para = 0; Real kappa_perp = 0; Real kappa_wedge = 0;
+  Real nu_neu = 0; Real nu_para = 0; Real nu_perp1 = 0; Real nu_perp2 = 0;
+  Real nu_wedge1 = 0; Real nu_wedge2 = 0; Real zeta_bulk = 0; Real ion_frac= 0;
+  Real eta_o = 0; Real eta_ad = 0; Real eta_h = 0;
+  Real kappa_TE_para = 0; Real kappa_TE_perp = 0; Real kappa_TE_wedge = 0;
+  bool debug_therm_conduct_only = false; bool debug_therm_force_only = false;
+  int problem_ID = 0; // tracks which test to run. called in MeshBlock::UserMeshBlockData
 
-// case 0
-Real T_0 = 0; Real A_T = 0;
-int  nx  = 0; int  ny  = 0; int  nz  = 0;
-Real kx  = 0; Real ky  = 0; Real kz  = 0;
+  // case 0
+  Real T0 = 0.0;
+  int  nx  = 0; int  ny  = 0; int  nz  = 0;
+  Real kx  = 0.0; Real ky  = 0.0; Real kz  = 0.0;
 
-// case 1
-Real v0   = 0;
-Real a1 = 0;   // k_hat
-Real a2 = 0;   // b_hat
-Real a3 = 0;   // k_hat x b_hat
-Real b_tilt = 0;
-Real khat_x = 0.0;  Real khat_y = 0.0; Real khat_z = 0.0;
-Real bhat_x = 0.0;  Real bhat_y = 0.0; Real bhat_z = 0.0;
-Real ec_x = 0.0; Real ec_y = 0.0; Real ec_z = 0.0; // k_hat x b_hat
-Real B0_mag = 0.0;
+  // case 1 + 5
+  Real v0   = 0.0;
+  Real a1 = 0.0;   // k_hat amp
+  Real a2 = 0.0;   // b_hat amp
+  Real a3 = 0.0;   // k_hat x b_hat amp
+  Real khat_x = 0.0;  Real khat_y = 0.0; Real khat_z = 0.0;
+  Real bhat_x = 0.0;  Real bhat_y = 0.0; Real bhat_z = 0.0;
+  Real ec_x = 0.0; Real ec_y = 0.0; Real ec_z = 0.0; // k_hat x b_hat
+  Real B0_mag = 0.0;
 
-// case 2 + 3
-Real dB_amp = 0; // amplitude of the field perturbation
+  // case 0 + 3 + 4 + 6
+  Real dT_amp;
+  // case 2 + 3
+  Real dB_amp = 0; // amplitude of the field perturbation
 
-// case 3 + 4 + 6
-Real dT_amp;
+  // case 4
+  Real kB = 0; // Beltrami wavenumber
 
-// case 4
-Real kB = 0; // Beltrami wavenumber: b turns once over z
+  // Array index for hdf5 output
+  const int out_T      = 0;  // temperature
+  const int out_sound    = 1;  // adiabatic sound speed
+  const int out_alfven   = 2;  // alfven speed
+  const int out_normAlfven = 3;  // normal (x-face) alfven speed
+  const int out_slowMag  = 4;  // slow magnetosonic speed
+  const int out_fastMag  = 5;  // fast magnetosonic speed
+  const int out_whist    = 6;  // hall effect whistler wave
+  const int out_ioncyc   = 7;  // hall effect ion cyclotron speed
+  const int out_TEwave   = 8;  // Peltier/Seebeck speed
+  const int out_TEWwave  = 9;  // Peltier/Seebeck + Hall wavespeed
+  const int out_GVwave   = 10; // gyro-viscous wave speed
+  const int out_RLspeed  = 11; // righi-leduc advection speed
 
-// Array index for hdf5 output
-const int out_T      = 0;  // temperature
-const int out_sound    = 1;  // adiabatic sound speed
-const int out_alfven   = 2;  // alfven speed
-const int out_normAlfven = 3;  // normal (x-face) alfven speed
-const int out_slowMag  = 4;  // slow magnetosonic speed
-const int out_fastMag  = 5;  // fast magnetosonic speed
-const int out_whist    = 6;  // hall effect whistler wave
-const int out_ioncyc   = 7;  // hall effect ion cyclotron speed
-const int out_TEwave   = 8;  // Peltier/Seebeck speed
-const int out_TEWwave  = 9;  // Peltier/Seebeck + Hall wavespeed
-const int out_GVwave   = 10; // gyro-viscous wave speed
-const int out_RLspeed  = 11; // righi-leduc advection speed
-
-/*
-const int out_dt_ideal   = 12; // ideal flow
-const int out_dt_vis_para  = 13; // parabolic viscosity
-const int out_dt_cnd_para  = 14; // parabolic thermal conduction
-const int out_dt_vis_hyp   = 15; // hyperbolic (gyro) viscosity
-const int out_dt_cnd_hyp   = 16; // hyperbolic (RL) thermal conduction
-const int out_dt_cnd_tot   = 17; // total thermal conduction
-const int out_dt_vis_tot   = 18; // total viscosity
-const int out_dt_oah     = 19; // ohmic + ambipolar + hall (no TE)
-const int out_dt_TE    = 20; // unsplit isolated TE (P/S + N/E)
-const int out_dt_TE_hyp  = 21; // Hall+P/S
-const int out_dt_total   = 22; // Actual timestep
-*/
-const int out_WP       = 12;
-};
+  /*
+  const int out_dt_ideal   = 12; // ideal flow
+  const int out_dt_vis_para  = 13; // parabolic viscosity
+  const int out_dt_cnd_para  = 14; // parabolic thermal conduction
+  const int out_dt_vis_hyp   = 15; // hyperbolic (gyro) viscosity
+  const int out_dt_cnd_hyp   = 16; // hyperbolic (RL) thermal conduction
+  const int out_dt_cnd_tot   = 17; // total thermal conduction
+  const int out_dt_vis_tot   = 18; // total viscosity
+  const int out_dt_oah     = 19; // ohmic + ambipolar + hall (no TE)
+  const int out_dt_TE    = 20; // unsplit isolated TE (P/S + N/E)
+  const int out_dt_TE_hyp  = 21; // Hall+P/S
+  const int out_dt_total   = 22; // Actual timestep
+  */
+  const int out_WP       = 12;
+}; // namespace
 
 // Initialise functions
 void GetTemperature(MeshBlock *pmb);
@@ -139,7 +154,6 @@ void FieldErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf);
 void PSModeAmplitudes(Real t, Real &AT, Real &ABy, Real &ABz);
 
 void Mesh::InitUserMeshData(ParameterInput *pin) {
-
   if(!MAGNETIC_FIELDS_ENABLED) {
     std::stringstream msg;
     msg << "### FATAL ERROR in Problem Generator" << std::endl
@@ -226,7 +240,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
 }
 
 void MeshBlock::InitUserMeshBlockData(ParameterInput *pin) {
-
   AllocateUserOutputVariables(13);
   SetUserOutputVariableName(out_T,"Temperature");
   SetUserOutputVariableName(out_sound,"Sound speed");
@@ -260,7 +273,6 @@ void MeshBlock::InitUserMeshBlockData(ParameterInput *pin) {
 }
 
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
-
   if(gid == 0) {std::cout << "MeshBlock::ProblemGenerator called \n";}
 
   // used for T0 array in case 3
@@ -289,8 +301,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           pfield->b.x1f(k,j,i) = Bx_0;
           pfield->b.x2f(k,j,i) = By_0;
           pfield->b.x3f(k,j,i) = Bz_0;
-          if(k <=ke && j<=je && i <= ie)
-          {
+          if(k <=ke && j<=je && i <= ie) {
             phydro->u(IEN,k,j,i) += B_energy;
           }
         }
@@ -312,11 +323,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   //   case 7: HLLE-mod tests
   //   case 8: timestep sweep
 
-  switch (problem_ID)
-  {
+  switch (problem_ID) {
     case 0: { // ---- single thermal mode: conduction ----
-      T_0 = P_0/rho_0;
-      A_T = pin->GetOrAddReal("problem","mode_amp_T", 1.0e-6);
+      T0 = P_0/rho_0;
+      dT_amp = pin->GetOrAddReal("problem","dT_amp", 1.0e-6);
       nx  = pin->GetOrAddInteger("problem","mode_nx", 1);
       ny  = pin->GetOrAddInteger("problem","mode_ny", 0);
       nz  = pin->GetOrAddInteger("problem","mode_nz", 0);
@@ -333,7 +343,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                     for (int i = is; i <= ie; i++ ) {
                         x = this->pcoord->x1v(i);
                         // single Fourier mode in T at uniform pressure:
-                        T_local = T_0*(1.0 + A_T*std::cos(kx*x + ky*y + kz*z));
+                        T_local = T0*(1.0 + dT_amp*std::cos(kx*x + ky*y + kz*z));
                         phydro->u(IDN,k,j,i) = P_0/T_local;        // pressure equilibrium
                         phydro->u(IEN,k,j,i) = P_0/gm1 + B_energy; // uniform
                     } // i loop
@@ -341,16 +351,16 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
             } // k loop
             break;}
     case 1: { // ---- single velocity mode: viscosity ----
-      v0   = pin->GetOrAddReal("problem","visc_amp", 1.0e-6);
+      v0   = pin->GetOrAddReal("problem","dv_amp", 1.0e-6);
       a1 = pin->GetOrAddReal("problem","visc_a1", 1.0);   // k_hat amp
       a2 = pin->GetOrAddReal("problem","visc_a2", 1.0);   // b_hat amp
       a3 = pin->GetOrAddReal("problem","visc_a3", 1.0);   // k_hat x b_hat amp
-      b_tilt = PI/3.0;
+      Real b_tilt = PI/3.0;
       kx   = 2.0*PI/(xmax - xmin);
       Real x  = 0; Real y = 0; Real z = 0; Real vel = 0;
 
       khat_x = 1.0; khat_y = 0.0; khat_z = 0.0; // k_hat along x direction
-      bhat_x = 0; bhat_y = std::cos(b_tilt); bhat_z = std::sin(b_tilt); // b_hat in y-z plane
+      bhat_x = 0; bhat_y = std::cos(b_tilt); bhat_z = std::sin(b_tilt); // b_hat in y-z
       ec_x = 0.0; ec_y = -bhat_z; ec_z = bhat_y; // k_hat x b_hat
 
       // field along b_hat, velocity directions are the viscous eigenvectors
@@ -388,7 +398,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
     bhat_x = std::cos(theta);  bhat_y = std::sin(theta);  bhat_z = 0.0;
     kx   = 2.0*PI/(xmax - xmin); // one wavelength in x
-    dB_amp = 1.0e-6;
+    dB_amp = pin->GetOrAddReal("problem","dB_amp", 1.0e-6);
 
     if (B0_mag == 0.0) {
       std::stringstream msg;
@@ -429,18 +439,19 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           // Perturbations: cos(Kx). dT, dB_y along b
           // kappa_par, Righi-Leduc, Hall and Peltier-Seebeck all drop out at
           // k perpendicular to b. well-posed when D_T D_B > c_TB c_BT.
-          Real T0 = P_0/rho_0;
+          T0 = P_0/rho_0;
           B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
           bhat_x = 0.0;  bhat_y = 1.0;  bhat_z = 0.0;
           kx     = 2.0*PI/(xmax - xmin);
-          dT_amp = 1.0e-6;
-          dB_amp = 1.0e-6;
+          dT_amp = pin->GetOrAddReal("problem","dT_amp", 1.0e-6);
+          dB_amp = pin->GetOrAddReal("problem","dB_amp", 1.0e-6);
 
       if (B0_mag == 0.0) {
         std::stringstream msg;
         msg << "### FATAL ERROR in ProblemGenerator case 3" << std::endl
-          << "needs a nonzero background field (the input sets its magnitude)" << std::endl;
-        ATHENA_ERROR(msg);
+            << "needs a nonzero background field (the input sets its magnitude)"
+            << std::endl;
+            ATHENA_ERROR(msg);
       }
 
           for (int kk = ks; kk <= ke; kk++ ) {
@@ -474,20 +485,20 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         case 4: {
           // ---- Righi-Leduc: Beltrami field, temperature mode across it ----
           // B = (cos kB z, sin kB z, 0) with |B| = B0_mag: curl B = -kB b,
-          //T = T_0 + dT cos(kx x).
-          const Real T0 = P_0/rho_0;
+          //T = T0 + dT cos(kx x).
+          T0 = P_0/rho_0;
           B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
           kx     = 2.0*PI/(xmax - xmin);
           kB     = 2.0*PI/(zmax - zmin);
-         dT_amp = 1.0e-6;
+          dT_amp = pin->GetOrAddReal("problem","dT_amp", 1.0e-6);
 
-      if (B0_mag == 0.0) {
-        std::stringstream msg;
-        msg << "### FATAL ERROR in ProblemGenerator case 4" << std::endl
-            << "needs a nonzero background field (the input sets its magnitude)"
-            << std::endl;
-        ATHENA_ERROR(msg);
-      }
+          if (B0_mag == 0.0) {
+            std::stringstream msg;
+            msg << "### FATAL ERROR in ProblemGenerator case 4" << std::endl
+                << "needs a nonzero background field (the input sets its magnitude)"
+                << std::endl;
+            ATHENA_ERROR(msg);
+          }
 
           for (int kk = ks; kk <= ke; kk++ ) {
               for (int j = js; j <= je; j++ ) {
@@ -537,13 +548,14 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           for (int kk = ks; kk <= ke; kk++ ) {
               for (int j = js; j <= je; j++ ) {
                   for (int i = is; i <= ie; i++ ) {
-                      Real vx = v0*std::sin(kz*this->pcoord->x3v(kk)); // along-b mode starts along x
-                      Real vy = v0*std::sin(kx*this->pcoord->x1v(i));  // across-b mode starts along y
+                      Real vx = v0*std::sin(kz*this->pcoord->x3v(kk)); // along-b: x
+                      Real vy = v0*std::sin(kx*this->pcoord->x1v(i));  // across-b: y
                       phydro->u(IDN,kk,j,i) = rho_0;
                       phydro->u(IM1,kk,j,i) = rho_0*vx;
                       phydro->u(IM2,kk,j,i) = rho_0*vy;
                       phydro->u(IM3,kk,j,i) = 0.0;
-                      phydro->u(IEN,kk,j,i) = P_0/gm1 + 0.5*SQR(B0_mag) + 0.5*rho_0*(vx*vx + vy*vy);
+                      phydro->u(IEN,kk,j,i) = P_0/gm1 + 0.5*SQR(B0_mag)
+                                                      + 0.5*rho_0*(vx*vx + vy*vy);
                   }
               }
           }
@@ -564,13 +576,13 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         case 6: {
           // ---- Thermoelectric Mode: Peltier-Seebeck, (+ Hall) ----
           // B0 = B0_mag (cos theta, sin theta, 0), theta = 45 deg to k = kx x-hat;
-          // T = T_0 + dT cos(kx x)
+          // T = T0 + dT cos(kx x)
           Real theta = PI/4.0; // sin cos is largest here
-          const Real T0 = P_0/rho_0;
+          T0 = P_0/rho_0;
           B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
           bhat_x = std::cos(theta);  bhat_y = std::sin(theta);  bhat_z = 0.0;
           kx     = 2.0*PI/(xmax - xmin);
-          dT_amp = 1.0e-6;
+          dT_amp = pin->GetOrAddReal("problem","dT_amp", 1.0e-6);
 
           if (B0_mag == 0.0) {
             std::stringstream msg;
@@ -611,42 +623,42 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           break;}
         // ---- (T, rho, |B|) sweep for the timestep check ----
         case 8: {
-                // x -> T,  y -> rho,  z -> |B|.  Log-spaced about the base state.
-                // Run single-block with time/nlim=0.
-                // Run with uniform cartesian grid
-                Real dx = pcoord->dx1f(1);
-                Real T_0 = P_0/rho_0;
-                Real B_0 = std::abs(Bx_0);
+          // x -> T,  y -> rho,  z -> |B|.  Log-spaced about the base state.
+          // Run single-block with time/nlim=0.
+          // Run with uniform cartesian grid
+          Real dx = pcoord->dx1f(1);
+          T0 = P_0/rho_0;
+          Real B_0 = std::abs(Bx_0);
 
-        int nT = ie - is + 1, nR = je - js + 1, nB = ke - ks + 1;
-        AthenaArray<Real> Tg, Rg, Bg;
-        Tg.NewAthenaArray(nT);  Rg.NewAthenaArray(nR);  Bg.NewAthenaArray(nB);
-        for (int n = 0; n < nT; n++) Tg(n)   = T_0*std::pow(10.0, dx*(n - 0.5*(nT-1)));
-        for (int n = 0; n < nR; n++) Rg(n)   = rho_0*std::pow(10.0, dx*(n - 0.5*(nR-1)));
-        for (int n = 0; n < nB; n++) Bg(n)   = B_0*std::pow(10.0, dx*(n - 0.5*(nB-1)));
+          int nT = ie - is + 1, nR = je - js + 1, nB = ke - ks + 1;
+          AthenaArray<Real> Tg, Rg, Bg;
+          Tg.NewAthenaArray(nT);  Rg.NewAthenaArray(nR);  Bg.NewAthenaArray(nB);
+          for (int n = 0; n < nT; n++) Tg(n)   = T0*std::pow(10.0, dx*(n-0.5*(nT-1)));
+          for (int n = 0; n < nR; n++) Rg(n)   = rho_0*std::pow(10.0, dx*(n-0.5*(nR-1)));
+          for (int n = 0; n < nB; n++) Bg(n)   = B_0*std::pow(10.0, dx*(n-0.5*(nB-1)));
 
-        for (int k = ks; k <= ke+1; k++) {
-          Real Bl = Bg(std::min(k - ks, nB-1));
-          for (int j = js; j <= je+1; j++) {
-            for (int i = is; i <= ie+1; i++) {
-              pfield->b.x1f(k,j,i) = Bl*Bx_0/B_0;
-              pfield->b.x2f(k,j,i) = 0.0;
-              pfield->b.x3f(k,j,i) = 0.0;
+          for (int k = ks; k <= ke+1; k++) {
+            Real Bl = Bg(std::min(k - ks, nB-1));
+            for (int j = js; j <= je+1; j++) {
+              for (int i = is; i <= ie+1; i++) {
+                pfield->b.x1f(k,j,i) = Bl*Bx_0/B_0;
+                pfield->b.x2f(k,j,i) = 0.0;
+                pfield->b.x3f(k,j,i) = 0.0;
+              }
             }
           }
-        }
-        for (int k = ks; k <= ke; k++) {
-          for (int j = js; j <= je; j++) {
-            for (int i = is; i <= ie; i++) {
-              phydro->u(IDN,k,j,i) = Rg(j-js);
-              phydro->u(IM1,k,j,i) = 0.0;
-              phydro->u(IM2,k,j,i) = 0.0;
-              phydro->u(IM3,k,j,i) = 0.0;
-              phydro->u(IEN,k,j,i) = Rg(j-js)*Tg(i-is)/gm1 + 0.5*SQR(Bg(k-ks));
+          for (int k = ks; k <= ke; k++) {
+            for (int j = js; j <= je; j++) {
+              for (int i = is; i <= ie; i++) {
+                phydro->u(IDN,k,j,i) = Rg(j-js);
+                phydro->u(IM1,k,j,i) = 0.0;
+                phydro->u(IM2,k,j,i) = 0.0;
+                phydro->u(IM3,k,j,i) = 0.0;
+                phydro->u(IEN,k,j,i) = Rg(j-js)*Tg(i-is)/gm1 + 0.5*SQR(Bg(k-ks));
+              }
             }
           }
-        }
-      break;}
+        break;}
   default:
     std::cout << "ERROR. Problem_ID can be: \n"
     << "0 - temperature mode (thermal conduction), \n "
@@ -660,7 +672,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     exit(-1);
   }
 
- // Output initial conditions
+  // Output initial conditions
   if(Globals::my_rank ==0 && gid == 0) {
   std::cout << "Simulation Set Up: \n";
   std::cout << "\t Spatial Reconstruction: " << pin->GetString("time","xorder") << "\n";
@@ -686,7 +698,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   std::cout << "\t\t" << "Desnity Floor = " << rho_floor << " M L^-3 \n";
   // Time Variables
   std::cout << "\t" << "Time Variables: \n";
-  std::cout << "\t\t" << "CLF number = " << CFL << " arb. u. \n" ;
+  std::cout << "\t\t" << "CLF number = " << CFL << " arb. u. \n";
   // Diffusion Variables
   std::cout << "\t" << "Diffusion on/off: \n";
   std::cout << "\t\t" << "Kappa Neutral: " << (kappa_neu > 0.0) << "\n";
@@ -708,9 +720,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 }
 
 void MeshBlock::UserWorkInLoop() {
-
   if(gid == 0 && pmy_mesh->time == 0) {
-    std::cout << "MeshBlock::UserWorkInLoop called \n" ;
+    std::cout << "MeshBlock::UserWorkInLoop called \n";
   }
 
   GetTemperature(this);
@@ -719,18 +730,16 @@ void MeshBlock::UserWorkInLoop() {
 }
 
 void Mesh::UserWorkInLoop() {
-
   if(time == 0 && Globals::my_rank == 0) {
-    std::cout << "Mesh::UserWorkInLoop called \n" ;
+    std::cout << "Mesh::UserWorkInLoop called \n";
   }
 
   return;
 }
 
 void MeshBlock::UserWorkBeforeOutput(ParameterInput *pin) {
-
   if(gid == 0 && pmy_mesh->time == 0) {
-    std::cout << "MeshBlock::UserWorkBeforeOutput called \n" ;
+    std::cout << "MeshBlock::UserWorkBeforeOutput called \n";
   }
 
   GetTemperature(this);
@@ -742,9 +751,8 @@ void MeshBlock::UserWorkBeforeOutput(ParameterInput *pin) {
 }
 
 void Mesh::UserWorkAfterLoop(ParameterInput *pin) {
-
   if(time == 0 && Globals::my_rank == 0) {
-    std::cout << "Mesh::UserWorkAfterLoop called \n" ;
+    std::cout << "Mesh::UserWorkAfterLoop called \n";
   }
   return;
 }
@@ -753,7 +761,6 @@ void Mesh::UserWorkAfterLoop(ParameterInput *pin) {
 //! \fn void GetTemperature
 //! \brief Fills MeshBlock::user_out_var[out_temperature]
 void GetTemperature(MeshBlock *pmb) {
-
   // Get position indicies
   int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
   int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
@@ -777,7 +784,6 @@ void GetTemperature(MeshBlock *pmb) {
 //! \fn GetWaveSpeeds
 //! \brief Calcualtes wavespeeds (sound, magnetic, whistler, ion-cyclotron, TE, GV)
 void GetWaveSpeeds(MeshBlock *pmb) {
-
   // Get position indicies
   int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
   int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
@@ -857,7 +863,7 @@ void GetWaveSpeeds(MeshBlock *pmb) {
         ci = 0.5*(eta_h*nyquest_wavenumber)
            - std::sqrt(0.25*eta_h*eta_h*nyquest_wavenumber*nyquest_wavenumber
                  + can*can);
-        } else{cw = 0; ci = 0;}
+        } else {cw = 0; ci = 0;}
 
         if(fdif_.kappa_aniso_TE_para || fdif_.kappa_aniso_TE_perp >0.0) {
           Real dkJ = kJpara - kJperp;
@@ -948,7 +954,6 @@ void GetWaveSpeeds(MeshBlock *pmb) {
   }
   return;
 }
-
 
 /*
 //----------------------------------------------------------------------------------------
@@ -1066,6 +1071,7 @@ void GetTimeSteps(MeshBlock *pmb) {
   return;
 }
 */
+
 //----------------------------------------------------------------------------------------
 //! \fn void GetBhat
 //! \brief Cell-centred unit magnetic field; zero where |B| is unresolved.
@@ -1082,11 +1088,9 @@ void GetBhat(MeshBlock *pmb, int k, int j, int i, Real &bx, Real &by, Real &bz) 
   return;
 }
 
-
 void CalculateThermalKappa(HydroDiffusion *phdif, MeshBlock *pmb,
-  const AthenaArray<Real> &prim,const AthenaArray<Real> &bcc,
-  int is, int ie, int js, int je,int ks, int ke) {
-
+                           const AthenaArray<Real> &prim,const AthenaArray<Real> &bcc,
+                           int is, int ie, int js, int je,int ks, int ke) {
   Real rho = 0.0; Real P = 0.0; Real T = 0.0;
   Real Bx = 0.0; Real By = 0.0; Real Bz = 0.0;
   Real B = 0.0; Real k_neu = 0.0; Real k_para =0.0;
@@ -1109,7 +1113,6 @@ void CalculateThermalKappa(HydroDiffusion *phdif, MeshBlock *pmb,
   for (int k = kl; k <= ku; k++) {
     for (int j = jl; j <= ju; j++) {
       for (int i = il; i <= iu; i++) {
-
       rho = pmb->phydro->w(IDN,k,j,i);
       P = pmb->phydro->w(IPR,k,j,i);
       T = P/rho;
@@ -1135,10 +1138,10 @@ void CalculateThermalKappa(HydroDiffusion *phdif, MeshBlock *pmb,
 
   return;
 }
-void CalculateViscousNu(HydroDiffusion *phdif, MeshBlock *pmb,
-  const AthenaArray<Real> &prim,const AthenaArray<Real> &bcc,
-  int is, int ie, int js, int je,int ks, int ke) {
 
+void CalculateViscousNu(HydroDiffusion *phdif, MeshBlock *pmb,
+                        const AthenaArray<Real> &prim,const AthenaArray<Real> &bcc,
+                        int is, int ie, int js, int je,int ks, int ke) {
   Real rho = 0.0; Real P = 0.0; Real T = 0.0;
   Real Bx = 0.0; Real By = 0.0; Real Bz = 0.0;
   Real B = 0.0; Real n_neu = 0.0; Real n_para =0.0;
@@ -1161,7 +1164,6 @@ void CalculateViscousNu(HydroDiffusion *phdif, MeshBlock *pmb,
   for (int k = kl; k <= ku; k++) {
     for (int j = jl; j <= ju; j++) {
       for (int i = il; i <= iu; i++) {
-
       rho = pmb->phydro->w(IDN,k,j,i);
       P = pmb->phydro->w(IPR,k,j,i);
       T = P/rho;
@@ -1186,13 +1188,12 @@ void CalculateViscousNu(HydroDiffusion *phdif, MeshBlock *pmb,
       }
     }
   }
-
   return;
 }
-void CalculateMagDiff(FieldDiffusion *pfdif, MeshBlock *pmb,
-  const AthenaArray<double> &w, const AthenaArray<double> &bmag,
-  int is, int ie, int js, int je, int ks, int ke) {
 
+void CalculateMagDiff(FieldDiffusion *pfdif, MeshBlock *pmb,
+                      const AthenaArray<double> &w, const AthenaArray<double> &bmag,
+                      int is, int ie, int js, int je, int ks, int ke) {
   Real rho = 0.0; Real P = 0.0; Real T = 0.0;
   Real Bx = 0.0; Real By = 0.0; Real Bz = 0.0;
   Real B = 0.0; Real HII = 0.0;
@@ -1217,7 +1218,6 @@ void CalculateMagDiff(FieldDiffusion *pfdif, MeshBlock *pmb,
   for (int k = kl; k <= ku; k++) {
     for (int j = jl; j <= ju; j++) {
       for (int i = il; i <= iu; i++) {
-
       rho = pmb->phydro->w(IDN,k,j,i);
       P = pmb->phydro->w(IPR,k,j,i);
       T = P/rho;
@@ -1251,7 +1251,6 @@ void CalculateMagDiff(FieldDiffusion *pfdif, MeshBlock *pmb,
 }
 
 void CalculateWellPosedness(MeshBlock *pmb) {
-
   // Get position indicies
   int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
   int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
@@ -1278,7 +1277,6 @@ void CalculateWellPosedness(MeshBlock *pmb) {
         // D_T D_B/(c_TB c_BT): well-posed when > 1
         Real wp = (cc > 0.0) ? gm1*((1-HII)*kn + HII*kp)*(eta_o+eta_a)/cc : HUGE_NUMBER;
         pmb->user_out_var(out_WP,k,j,i) = wp;
-
       }
     }
   }
@@ -1290,8 +1288,6 @@ void CalculateWellPosedness(MeshBlock *pmb) {
 Real TETimeStep(MeshBlock *pmb) {
   return 1e-4;
 }
-
-
 
 //----------------------------------------------------------------------------------------
 //! \fn void TemperatureErrors
@@ -1308,32 +1304,32 @@ void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
   Real amp = 0.0; // case 0: mode amplitude
   switch (problem_ID) {
     case 0: { // ---- single thermal mode: frozen-flow (isochoric) decay ----
-      // T(r,t) = T_0*(1 + A_T*exp(-rate*t)*cos(k.x)), rate = (gamma-1)*kappa*k^2.
+      // T(r,t) = T0*(1 + dT*exp(-rate*t)*cos(k.x)), rate = (gamma-1)*kappa*k^2.
       Real k2 = kx*kx + ky*ky + kz*kz;
       Real B0 = std::sqrt(Bx_0*Bx_0 + By_0*By_0 + Bz_0*Bz_0);
       Real K_par = (B0 > 0.0) ? (kx*Bx_0 + ky*By_0 + kz*Bz_0)/B0 : 0.0; // k.b_hat
       Real HII = (kappa_neu > 0.0) ? ion_frac : 1.0;
       Real rate = gm1*((1.0 - HII)*kappa_neu*k2
             + HII*(kappa_para*SQR(K_par) + kappa_perp*(k2 - SQR(K_par))));
-      amp = A_T*std::exp(-rate*t);
+      amp = dT_amp*std::exp(-rate*t);
 
-    for (int k = ks; k <= ke; k++) {
-        for (int j = js; j <= je; j++) {
-            for (int i = is; i <= ie; i++) {
-                Real T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
-                Real T_ana = T_0*(1.0 + amp*std::cos(kx*pco->x1v(i) + ky*pco->x2v(j)
-                           + kz*pco->x3v(k)));
-                Real err = std::abs(T_sim - T_ana);
-                Real dV = pco->GetCellVolume(k,j,i);
-                l1 += err*dV;
-                l2sq += err*err*dV;
-                linf = std::max(linf, err);
+      for (int k = ks; k <= ke; k++) {
+          for (int j = js; j <= je; j++) {
+              for (int i = is; i <= ie; i++) {
+                  Real T_sim = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
+                  Real T_ana = T0*(1.0 + amp*std::cos(kx*pco->x1v(i) + ky*pco->x2v(j)
+                            + kz*pco->x3v(k)));
+                  Real err = std::abs(T_sim - T_ana);
+                  Real dV = pco->GetCellVolume(k,j,i);
+                  l1 += err*dV;
+                  l2sq += err*err*dV;
+                  linf = std::max(linf, err);
+              }
             }
           }
-        }
       break;}
     case 3: {
-      Real T0   = P_0/rho_0;
+      T0   = P_0/rho_0;
       Real HII  = (kappa_neu > 0.0) ? ion_frac : 1.0;
       Real DT   = gm1*((1.0 - HII)*kappa_neu + HII*kappa_perp); // kapa_eff
       Real DB   = eta_o + eta_ad*SQR(B0_mag);                   // eta_eff
@@ -1345,38 +1341,37 @@ void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
       Real tau  = kx*kx*t;
       Real q    = D2*tau*tau;
 
-    Real EC = 0.0; Real ES = 0.0; // e^{-a tau} cosh(D tau), e^{-a tau} sinh(D tau)/D
-    if (q < 1.0e-4) {       // Taylor series in D^2: no 0/0 at D = 0
-    Real decay = std::exp(-abar*tau);
-    EC = decay*(1.0 + q/2.0 + q*q/24.0);
-    ES = decay*tau*(1.0 + q/6.0 + q*q/120.0);
-    } else {                   // D real, combine exponents first
-    Real D  = std::sqrt(D2);
-    Real ep = std::exp(-(abar - D)*tau); // grows when ill-posed (abar < D)
-    Real em = std::exp(-(abar + D)*tau);
-    EC = 0.5*(ep + em);
-    ES = 0.5*(ep - em)/D;
-    }
-    Real AT  = dT_amp*(EC - del*ES) - dB_amp*cTB*ES;
+      Real EC = 0.0; Real ES = 0.0; // e^{-a tau} cosh(D tau), e^{-a tau} sinh(D tau)/D
+      if (q < 1.0e-4) {       // Taylor series in D^2: no 0/0 at D = 0
+      Real decay = std::exp(-abar*tau);
+      EC = decay*(1.0 + q/2.0 + q*q/24.0);
+      ES = decay*tau*(1.0 + q/6.0 + q*q/120.0);
+      } else {                   // D real, combine exponents first
+      Real D  = std::sqrt(D2);
+      Real ep = std::exp(-(abar - D)*tau); // grows when ill-posed (abar < D)
+      Real em = std::exp(-(abar + D)*tau);
+      EC = 0.5*(ep + em);
+      ES = 0.5*(ep - em)/D;
+      }
+      Real AT  = dT_amp*(EC - del*ES) - dB_amp*cTB*ES;
 
-      for (int k = ks; k <= ke; k++) {
-        for (int j = js; j <= je; j++) {
-          for (int i = is; i <= ie; i++) {
-            Real cx  = std::cos(kx*pco->x1v(i));
-            Real Tn  = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
-            Real err = std::abs(Tn - (T0 + AT*cx));
-            Real dV  = pco->GetCellVolume(k,j,i);
-            l1   += err*dV;
-            l2sq += err*err*dV;
-            linf  = std::max(linf, err);
+        for (int k = ks; k <= ke; k++) {
+          for (int j = js; j <= je; j++) {
+            for (int i = is; i <= ie; i++) {
+              Real cx  = std::cos(kx*pco->x1v(i));
+              Real Tn  = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
+              Real err = std::abs(Tn - (T0 + AT*cx));
+              Real dV  = pco->GetCellVolume(k,j,i);
+              l1   += err*dV;
+              l2sq += err*err*dV;
+              linf  = std::max(linf, err);
+            }
           }
         }
-      }
-      break;
-    }
+      break;}
     case 4: { // ---- frozen-flow Righi-Leduc: each z-layer advects rigidly ----
-      // T = T_0 + dT0 cos(kx (x - U cos(kB z) t)),  U = (gamma-1) x kappa_wedge kB
-      Real T0     = P_0/rho_0;
+      // T = T0 + dT0 cos(kx (x - U cos(kB z) t)),  U = (gamma-1) x kappa_wedge kB
+      T0     = P_0/rho_0;
       Real HII    = (kappa_neu > 0.0) ? ion_frac : 1.0;
       Real U      = gm1*HII*kappa_wedge*kB; // Righi-Leduc advection speed
       for (int k = ks; k <= ke; k++) {
@@ -1393,11 +1388,10 @@ void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
           }
         }
       }
-      break;
-    }
+      break;}
     case 6: { // ---- frozen-flow Peltier-Seebeck (+ Hall) ----
       Real AT = 0.0; Real ABy = 0.0; Real ABz = 0.0;
-      Real T0 = P_0/rho_0;
+      T0 = P_0/rho_0;
       for (int k = ks; k <= ke; k++) {
         for (int j = js; j <= je; j++) {
           for (int i = is; i <= ie; i++) {
@@ -1411,8 +1405,7 @@ void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
           }
         }
       }
-      break;
-    }
+      break;}
     default:
       break;
   }
@@ -1572,8 +1565,7 @@ void FieldErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
 
   // case 3 Nernst/Ettinghausen (needs perp conduction and ambi)
   if (problem_ID == 3) {
-
-    Real T0   = P_0/rho_0;
+    T0   = P_0/rho_0;
     Real HII  = (kappa_neu > 0.0) ? ion_frac : 1.0;
     Real DT   = gm1*((1.0 - HII)*kappa_neu + HII*kappa_perp);
     Real DB   = eta_o + eta_ad*SQR(B0_mag);
@@ -1637,7 +1629,6 @@ void FieldErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
       }
     }
   }
-
   return;
 }
 
@@ -1648,14 +1639,14 @@ Real TemperatureL1(MeshBlock *pmb, int iout) {
   return l1;
 }
 
-// Squared L2 temperature error sum(T_sim-T_ana)^2 dV; take the sqrt after the MeshBlock sum
+// Squared L2 temperature error sum(T_sim-T_ana)^2 dV
 Real TemperatureL2(MeshBlock *pmb, int iout) {
   Real l1, l2sq, linf;
   TemperatureErrors(pmb, l1, l2sq, linf);
   return l2sq;
 }
 
-// L_inf temperature error max|T_sim-T_ana|; enrolled with the max reduction
+// L_inf temperature error max|T_sim-T_ana|
 Real TemperatureLInf(MeshBlock *pmb, int iout) {
   Real l1, l2sq, linf;
   TemperatureErrors(pmb, l1, l2sq, linf);
@@ -1669,14 +1660,14 @@ Real VelocityL1(MeshBlock *pmb, int iout) {
   return l1;
 }
 
-// Squared L2 velocity error sum|v_sim-v_ana|^2 dV; take the sqrt after the MeshBlock sum
+// Squared L2 velocity error sum|v_sim-v_ana|^2 dV
 Real VelocityL2(MeshBlock *pmb, int iout) {
   Real l1, l2sq, linf;
   VelocityErrors(pmb, l1, l2sq, linf);
   return l2sq;
 }
 
-// L_inf velocity error max|v_sim-v_ana|; enrolled with the max reduction
+// L_inf velocity error max|v_sim-v_ana|
 Real VelocityLInf(MeshBlock *pmb, int iout) {
   Real l1, l2sq, linf;
   VelocityErrors(pmb, l1, l2sq, linf);
@@ -1690,20 +1681,19 @@ Real FieldL1(MeshBlock *pmb, int iout) {
   return l1;
 }
 
-// Squared L2 field error sum|B_sim-B_ana|^2 dV; take the sqrt after the MeshBlock sum
+// Squared L2 field error sum|B_sim-B_ana|^2 dV
 Real FieldL2(MeshBlock *pmb, int iout) {
   Real l1, l2sq, linf;
   FieldErrors(pmb, l1, l2sq, linf);
   return l2sq;
 }
 
-// L_inf field error max|B_sim-B_ana|; enrolled with the max reduction
+// L_inf field error max|B_sim-B_ana|
 Real FieldLInf(MeshBlock *pmb, int iout) {
   Real l1, l2sq, linf;
   FieldErrors(pmb, l1, l2sq, linf);
   return linf;
 }
-
 
 void PSModeAmplitudes(Real t, Real &AT, Real &ABy, Real &ABz);
 //----------------------------------------------------------------------------------------
@@ -1714,11 +1704,10 @@ void PSModeAmplitudes(Real t, Real &AT, Real &ABy, Real &ABz);
 //  dBy(t) = dT0 beta c_BT (1 - cos(Omega tau))/Omega^2
 //  dBz(t) = -dT0 c_BT sin(Omega tau)/Omega
 //  c_TB = (gamma-1) x (kJpara - kJperp) sin cos / rho_0,
-//  c_BT = x (kJpara - kJperp) sin cos / T_0, //  beta = eta_H cos,
+//  c_BT = x (kJpara - kJperp) sin cos / T0, //  beta = eta_H cos,
 //  Omega^2 = beta^2 + c_TB c_BT.  Only kJpara - kJperp enters.
 void PSModeAmplitudes(Real t, Real &AT, Real &ABy, Real &ABz) {
-  Real T0     = P_0/rho_0;
-  Real dT_amp = 1.0e-6;                            // dT0 pgen
+  T0     = P_0/rho_0;
   Real HII  = (kappa_neu > 0.0) ? ion_frac : 1.0;  // ion weighting, as in the TE solvers
   Real c    = bhat_x; Real s = bhat_y;             // b direction
   Real dkJ  = HII*(kappa_TE_para - kappa_TE_perp); // only the anisotropy acts

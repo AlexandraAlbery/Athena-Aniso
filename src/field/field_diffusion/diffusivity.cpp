@@ -1669,8 +1669,7 @@ void FieldDiffusion::PoyntingFlux(EdgeField &e, const AthenaArray<Real> &bc,
 //  J P Brodrick et al 2018 Plasma Phys. Control. Fusion 60 084009
 Real GetqPerpSat(MeshBlock *pmb, int kl, int ku, int jl, int ju, int il, int iu,
                  Real grad2, Real b_dot_grad_T_) {
-
- HydroDiffusion &hdif = pmb->phydro->hdif;
+  HydroDiffusion &hdif = pmb->phydro->hdif;
   AthenaArray<Real> &w = pmb->phydro->w;
   Real rho = 0.0, P = 0.0, kperp = 0.0;
   int n = 0;
