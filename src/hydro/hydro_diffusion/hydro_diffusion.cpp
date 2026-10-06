@@ -275,7 +275,7 @@ void HydroDiffusion::AddDiffusionEnergyFlux(AthenaArray<Real> *flux_src,
 
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
-    #pragma omp simd
+#pragma omp simd
       for (int i=is; i<=ie; ++i) {
         x1flux(IEN,k,j,i) += x1diflx(k,j,i);
         if (i == ie) x1flux(IEN,k,j,i+1) += x1diflx(k,j,i+1);

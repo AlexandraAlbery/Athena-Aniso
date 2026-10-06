@@ -406,7 +406,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
     }
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
-    #pragma omp simd
+#pragma omp simd
       for (int i=is; i<=ie+1; ++i) {
         Real nu_iso = 0.0, nu_para = 0.0, nu_perp = 0.0, nu_wedge = 0.0;
         Real rho_face = 0.0;
@@ -788,7 +788,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
   if (f2) { // j direction
     for (int k=kl; k<=ku; ++k) {
       for (int j=js; j<=je+1; ++j) {
-      #pragma omp simd
+#pragma omp simd
         for (int i=il; i<=iu; ++i) {
           Real nu_iso = 0.0, nu_para = 0.0, nu_perp = 0.0, nu_wedge = 0.0;
           Real rho_face = 0.0;
@@ -1181,7 +1181,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
   if (f3) { // k direction
     for (int k=ks; k<=ke+1; ++k) {
       for (int j=jl; j<=ju; ++j) {
-      #pragma omp simd
+#pragma omp simd
         for (int i=il; i<=iu; ++i) {
           Real nu_iso = 0.0, nu_para = 0.0, nu_perp = 0.0, nu_wedge = 0.0;
           Real rho_face = 0.0;

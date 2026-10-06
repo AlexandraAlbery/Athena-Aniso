@@ -193,7 +193,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
   }
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
-    #pragma omp simd
+#pragma omp simd
       for (int i=is; i<=ie+1; ++i) {
       iso_flux = 0.0; para_flux = 0.0; perp_flux = 0.0; wedge_flux = 0.0;
 
@@ -325,7 +325,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
   if (f2) { // 2D or 3D
     for (int k=kl; k<=ku; ++k) {
       for (int j=js; j<=je+1; ++j) {
-        #pragma omp simd
+#pragma omp simd
         for (int i=il; i<=iu; ++i) {
       iso_flux = 0.0; para_flux = 0.0; perp_flux = 0.0; wedge_flux = 0.0;
 
@@ -455,7 +455,7 @@ void HydroDiffusion::ThermalFluxAniso(const AthenaArray<Real> &p,
   if (f3) { // 3D
     for (int k=ks; k<=ke+1; ++k) {
       for (int j=jl; j<=ju; ++j) {
-        #pragma omp simd
+#pragma omp simd
         for (int i=il; i<=iu; ++i) {
         iso_flux = 0.0;
         para_flux = 0.0;

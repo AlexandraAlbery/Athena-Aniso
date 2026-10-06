@@ -278,7 +278,7 @@ void FieldDiffusion::CalcCurrent(FaceField &b) {
     // cell-centered J (i,j,k)
     for (int k=ks-ext3; k<=ke+ext3; ++k) {
       for (int j=js-ext2; j<=je+ext2; ++j) {
-      #pragma omp simd
+#pragma omp simd
         for (int i=is-1; i<=ie+1; ++i) {
           // Jx at cc
           jcc(IB1,k,j,i) = 0.25*(J1(k,j,i) + J1(k+ext3,j,i) + J1(k,j+ext2,i)
@@ -296,7 +296,7 @@ void FieldDiffusion::CalcCurrent(FaceField &b) {
     // x-face J (i-1/2, j, k)
     for (int k=ks-ext3; k<=ke+ext3; ++k) {
       for (int j=js-ext2; j<=je+ext2; ++j) {
-    #pragma omp simd
+#pragma omp simd
         for (int i=is; i<=ie+1; ++i) {
           jfx(IB1,k,j,i) = 0.5*(jcc(IB1,k,j,i-1) + jcc(IB1,k,j,i));
           jfx(IB2,k,j,i) = 0.5*(jcc(IB2,k,j,i-1) + jcc(IB2,k,j,i));
@@ -309,7 +309,7 @@ void FieldDiffusion::CalcCurrent(FaceField &b) {
     if (pmb->block_size.nx2 > 1) {
       for (int k=ks-ext3; k<=ke+ext3; ++k) {
         for (int j=js; j<=je+1; ++j) {
-    #pragma omp simd
+#pragma omp simd
           for (int i=is-1; i<=ie+1; ++i) {
             jfy(IB1,k,j,i) = 0.5*(jcc(IB1,k,j-1,i) + jcc(IB1,k,j,i));
             jfy(IB2,k,j,i) = 0.5*(jcc(IB2,k,j-1,i) + jcc(IB2,k,j,i));
@@ -323,7 +323,7 @@ void FieldDiffusion::CalcCurrent(FaceField &b) {
     if (pmb->block_size.nx3 > 1) {
       for (int k=ks; k<=ke+1; ++k) {
         for (int j=js-ext2; j<=je+ext2; ++j) {
-    #pragma omp simd
+#pragma omp simd
           for (int i=is-1; i<=ie+1; ++i) {
             jfz(IB1,k,j,i) = 0.5*(jcc(IB1,k-1,j,i) + jcc(IB1,k,j,i));
             jfz(IB2,k,j,i) = 0.5*(jcc(IB2,k-1,j,i) + jcc(IB2,k,j,i));
@@ -832,7 +832,7 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
   // x face thermoelectric conduction
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
-      #pragma omp simd
+#pragma omp simd
       for (int i=is; i<=ie+1; ++i) {
         therm_para = therm_perp = therm_wedge = 0.0;
         qJx_para = 0.0; qJx_perp = 0.0; qJx_wedge = 0.0;
@@ -900,7 +900,7 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
   // y face thermoelectric conduction
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je+1; ++j) {
-      #pragma omp simd
+#pragma omp simd
       for (int i=is; i<=ie; ++i) {
         therm_para = therm_perp = therm_wedge = 0.0;
         qJy_para = qJy_perp = qJy_wedge = 0.0;
@@ -966,7 +966,7 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
     // z face thermoelectric conduction
     for (int k=ks; k<=ke+1; ++k) {
       for (int j=js; j<=je; ++j) {
-        #pragma omp simd
+#pragma omp simd
         for (int i=is; i<=ie; ++i) {
           therm_para = therm_perp = therm_wedge = 0.0;
           qJz_para =0.0; qJz_perp =0.0; qJz_wedge =0.0;
@@ -1144,7 +1144,7 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
     } // i loop
   } else  if (!f3) {// 2D update:
     for (int j=js; j<=je+1; ++j) {
-    #pragma omp simd
+#pragma omp simd
       for (int i=is; i<=ie+1; ++i) {
         // emf.x
         therm_para = 0.0; therm_perp = 0.0; therm_wedge = 0.0;
@@ -1357,7 +1357,7 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
   } else {  // 3D update
     for (int k=ks; k<=ke+1; ++k) {
       for (int j=js; j<=je+1; ++j) {
-      #pragma omp simd
+#pragma omp simd
         for (int i=is; i<=ie+1; ++i) {
           // emf.x
           therm_para = 0.0; therm_perp = 0.0; therm_wedge = 0.0;
