@@ -614,3 +614,32 @@ Real FieldDiffusion::TEHypEigenMax(const Real etaH, const Real HII, const Real k
   lam = 0.5*(SQR(etaH)*root_E/dk + dk/root_E);
   return lam;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn Real FieldDiffusion::GetqPerpSat(...)
+//! \brief Perpendicular saturation factor f_perp = q_sat/(q_sat + q_perp) at a cell edge,
+//!        for the Nernst EMF (FTw). Same formula as the perpendicular factor in
+//!        ThermalFluxAniso, from the edge's own gradient and the cells
+//  J P Brodrick et al 2018 Plasma Phys. Control. Fusion 60 084009
+Real FieldDiffusion::GetqPerpSat(MeshBlock *pmb, int kl, int ku, int jl, int ju,
+                                 int il, int iu, Real grad2, Real b_dot_grad_T_) {
+  HydroDiffusion &hdif = pmb->phydro->hdif;
+  AthenaArray<Real> &w = pmb->phydro->w;
+  Real rho = 0.0, prs = 0.0, kperp = 0.0;
+  int n = 0;
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=il; i<=iu; ++i) {
+        rho   += w(IDN,k,j,i);
+        prs   += w(IPR,k,j,i);
+        kperp += hdif.kappa(HydroDiffusion::DiffProcess::kappa_perp,k,j,i);
+        ++n;
+      }
+    }
+  }
+  rho /= n; prs /= n; kperp /= n;
+  const Real q_perp = kperp*rho*std::sqrt(std::max(grad2 - SQR(b_dot_grad_T_), 0.0));
+  const Real ciso2 = prs/rho;
+  const Real qsat = 1.5*rho*ciso2*std::sqrt(ciso2);
+  return qsat/(qsat + q_perp);
+}
