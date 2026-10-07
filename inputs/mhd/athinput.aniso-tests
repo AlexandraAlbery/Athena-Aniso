@@ -1,0 +1,102 @@
+<comment>
+problem   = Anisotropic_Diffusion_Tests # name
+reference = Alexandra Albery # author
+configure = python3 configure.py --prob aniso-tests -b --flux hlle_mod --nghost 2 -mpi # problem build command
+
+<job>
+problem_id = nc-64   # problem ID: basename of output filenames
+
+<output1>
+file_type  = hst    # History data dump
+id         = hist   # file name
+dcycle     = 1      # time increment between outputs
+
+<time>
+cfl_number  = 0.9       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim        = -1        # cycle limit
+tlim        = 3.0       # time limit
+integrator  = rk1       # time integrator
+#sts_integrator = rkl1  # sts integrator
+xorder      = 2         # order of spatial reconstruction
+ncycle_out  = 100       # interval for stdout summary info
+#dt_diagnostics = 0     # extra timestep diagnostic info
+#sts_max_dt_ratio = -1  # max dt to parabolic dt ratio
+
+<mesh>
+
+nx1        = 64        # Number of zones in X1-direction
+x1min      = -10.0     # in parsecs (converted from cm)
+x1max      =  10.0     # in parsecs (converted from cm)
+ix1_bc     = periodic  # inner-X1 boundary flag
+ox1_bc     = periodic  # outer-X1 boundary flag
+nx2        = 64        # Number of zones in X2-direction
+x2min      = -10.0     # in parsecs (converted from cm)
+x2max      =  10.0     # in parsecs (converted from cm)
+ix2_bc     = periodic  # inner-X2 boundary flag
+ox2_bc     = periodic  # outer-X2 boundary flag
+nx3        = 64        # Number of zones in X3-direction
+x3min      = -10.0     # in parsecs (converted from cm)
+x3max      =  10.0     # in parsecs (converted from cm)
+ix3_bc     = periodic  # inner-X3 boundary flag
+ox3_bc     = periodic  # outer-X3 boundary flag
+refinement  = none     # amr level
+
+<meshblock>
+
+nx1 = 32     # Number of zones in X1-direction, mesh/meshblock = maximum number of mpi threads
+nx2 = 32     # Number of zones in X2-direction
+nx3 = 32     # Number of zones in X3-direction
+
+<hydro>
+
+gamma  = 1.666666666666667 # Gamma
+dfloor = 1e-20             # Density floor
+pfloor = 1e-20             # Pressure floor
+sfloor = 0                 # Scalar floor
+
+<problem>
+
+problem_ID               = 0     # choose problem
+rho_0                    = 1.0   # Density
+P_0                      = 1.0   # Pressure
+vx_0                     = 0.0   # x velocity
+vy_0                     = 0.0   # y velocity
+vz_0                     = 0.0   # z velocity
+Bx_0                     = 1.0   # x mangetic field on x face
+By_0                     = 0.0   # y magnetic field on y face
+Bz_0                     = 0.0   # z magnetic field on z face
+ion_frac_const           = 0.0   # Ionisation weighting
+kappa_aniso_neutral      = 0.0   # Neutral thermal conduction
+kappa_aniso_para         = 0.0   # Parallel thermal conduction
+kappa_aniso_perp         = 0.0   # Perpendicular thermal conduction
+kappa_aniso_wedge        = 0.0   # Wedge thermal conduction
+nu_aniso_neutral         = 0.0   # Neutral viscosity
+nu_aniso_para            = 0.0   # Parallel (Pi0) viscosity
+nu_aniso_perp1           = 0.0   # Perpendicular (Pi1) viscosity
+nu_aniso_perp2           = 0.0   # Perpendicular (Pi2) viscosity
+nu_aniso_wedge1          = 0.0   # Wedge (Pi3) viscosity
+nu_aniso_wedge2          = 0.0   # Wedge (Pi4) viscosity
+zeta_bulk                = 0.0   # Bulk viscosity
+eta_ohm                  = 0.0   # Ohmic resistivity
+eta_ad                   = 0.0   # Ambipolar diffusion
+eta_hall                 = 0.0   # Hall effect
+kappa_aniso_TE_para      = 0.0   # Parallel thermoelectric conduction
+kappa_aniso_TE_perp      = 0.0   # Perpendicular thermoelectric conduction
+kappa_aniso_TE_wedge     = 0.0   # Wedge thermoelectric conduction
+debug_therm_conduct_only = false # Only conduction debug
+debug_therm_force_only   = false # Only force debug
+kappa_iso                = 0.0   # Isotropic test
+nu_iso                   = 0.0   # Isotropic test
+
+limit_saturated_conduction = 0   # saturated conduction
+flux_limit_conduction      = 1   # conduction flux limiter
+
+limit_pressure_anisotropy =  0   # viscosity saturation
+flux_limit_viscosity      =  1   # viscosity flux limiter
+
+dT_amp  = 1.0e-6 # case 0,3,4,6 param
+dB_amp  = 1.0e-6 # case 2,3 param
+dv_amp  = 1.0e-6 # case 1,5 param
+visc_a1 = 1.0e-6 # case 1 param
+visc_a2 = 1.0e-6 # case 1 param
+visc_a3 = 1.0e-6 # case 1 param
