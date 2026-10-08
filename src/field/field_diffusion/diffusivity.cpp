@@ -824,7 +824,8 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
   Real qJy_para = 0.0; Real qJy_perp = 0.0; Real qJy_wedge = 0.0;
   Real qJz_para = 0.0; Real qJz_perp = 0.0; Real qJz_wedge = 0.0;
 
-  const bool use_sat = pmb->phydro->hdif.limit_saturated_conduction;
+  const bool use_sat = pmb->phydro->hdif.limit_saturated_conduction
+                       && pmb->phydro->hdif.kappa_aniso_perp > 0.0;
   AthenaArray<Real> &sat_x1_ = pmb->phydro->hdif.sat_x1;
   AthenaArray<Real> &sat_x2_ = pmb->phydro->hdif.sat_x2;
   AthenaArray<Real> &sat_x3_ = pmb->phydro->hdif.sat_x3;
@@ -1063,7 +1064,8 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
   Real FTx_perp = 0.0; Real FTy_perp = 0.0; Real FTz_perp = 0.0;
   Real FTx_wedge = 0.0; Real FTy_wedge = 0.0; Real FTz_wedge = 0.0;
 
-  const bool use_sat = pmb->phydro->hdif.limit_saturated_conduction;
+  const bool use_sat = pmb->phydro->hdif.limit_saturated_conduction
+                       && pmb->phydro->hdif.kappa_aniso_perp > 0.0;
 
   if (!f2) { // 1D update:
     for (int i=is; i<=ie+1; ++i) {
