@@ -488,13 +488,12 @@ void FieldDiffusion::NewDiffusionDt(Real &dt_oa, Real &dt_h, Real &dt_OAH,
         if ((eta_ohm > 0.0) || (eta_ad > 0.0) || (eta_hall > 0.0)) {
           for (int i=is; i<=ie; ++i) {
             Real etaH = (eta_hall > 0.0) ? std::abs(etaB(DiffProcess::hall,k,j,i)) : 0.0;
-            dt_OAH = std::min(dt_OAH, static_cast<Real>(
-                                      fac_h*SQR(len(i)) /
-                                      (std::sqrt(eta_t(i)*eta_t(i)+ etaH*etaH)
-                                      + TINY_NUMBER)));
-            inv_dt_OAH(k,j,i) = 1.0 / (static_cast<Real>(fac_oa*SQR(len(i))*(eta_t(i)) /
-                                      ((eta_t(i)*eta_t(i) + etaH*etaH)
-                                      + TINY_NUMBER)));
+            // RK3 limit when Hall is on
+            // RK1/RK2 stability for unsplit OAH too restrictive
+            // pure Ohmic/ambipolar keeps RK1 limit
+            Real lam_OAH = std::sqrt(eta_t(i)*eta_t(i) + etaH*etaH);
+            inv_dt_OAH(k,j,i) = (etaH > 0.0) ? lam_OAH/(fac_h*SQR(len(i)))
+                                             : eta_t(i)/(fac_oa*SQR(len(i)));
           } // i loop
         } // end unsplit dt
       } // end if
