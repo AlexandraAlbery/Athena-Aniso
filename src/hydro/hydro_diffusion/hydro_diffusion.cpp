@@ -477,7 +477,7 @@ void HydroDiffusion::NewDiffusionDt(Real &dt_vis, Real &dt_cnd, Real &dt_vis_dis
           if (nu_aniso_wedge1 > 0.0 || nu_aniso_wedge2 > 0.0) {
             Real n_w1 = (nu_aniso_wedge1 > 0.0) ? nu(DiffProcess::nu_wedge1,k,j,i) : 0.0;
             Real n_w2 = (nu_aniso_wedge2 > 0.0) ? nu(DiffProcess::nu_wedge2,k,j,i) : 0.0;
-            nu_t_disp(i) = GyroViscEigenMax(HII, n_w1, n_w1);
+            nu_t_disp(i) = GyroViscEigenMax(HII, n_w1, n_w2);
             inv_dt_vis_disp(k,j,i) += 1.0 / (static_cast<Real>(
                                       SQR(len)*fac_gyro/(nu_t_disp(i) + TINY_NUMBER)));
             inv_dt_visc(k,j,i) += inv_dt_vis_disp(k,j,i);
