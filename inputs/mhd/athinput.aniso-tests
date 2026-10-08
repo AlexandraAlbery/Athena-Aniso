@@ -18,8 +18,8 @@ tlim        = 3.0       # time limit
 integrator  = rk1       # time integrator
 #sts_integrator = rkl1  # sts integrator
 xorder      = 2         # order of spatial reconstruction
-ncycle_out  = 100       # interval for stdout summary info
-#dt_diagnostics = 0     # extra timestep diagnostic info
+ncycle_out  = 1         # interval for stdout summary info
+dt_diagnostics = 0     # extra timestep diagnostic info
 #sts_max_dt_ratio = -1  # max dt to parabolic dt ratio
 
 <mesh>

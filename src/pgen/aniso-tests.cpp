@@ -116,6 +116,9 @@ namespace{
   const int out_dt_total   = 22; // Actual timestep
   */
   const int out_WP       = 12;
+
+  // check for blowups in unstable sims
+  bool nonfinite_found = false;
 }; // namespace
 
 // Initialise functions
@@ -726,12 +729,37 @@ void MeshBlock::UserWorkInLoop() {
 
   GetTemperature(this);
 
+    // flag a non-finite value and exit (dt=0 will run forever)
+    const Real T0bg = P_0/rho_0;
+    for (int k = ks; k <= ke; k++) {
+      for (int j = js; j <= je; j++) {
+        for (int i = is; i <= ie; i++) {
+          for (int n = 0; n < NHYDRO; n++) {
+            if (!std::isfinite(phydro->u(n,k,j,i))) nonfinite_found = true;
+          }
+          for (int n = IB1; n <= IB3; n++) {
+            if (!std::isfinite(pfield->bcc(n,k,j,i))) nonfinite_found = true;
+          }
+          if(pmy_mesh->dt == 0.0 || pmy_mesh->dt_hyperbolic == 0.0
+                                 || pmy_mesh->dt_parabolic == 0.0)
+            nonfinite_found = true;
+        }
+      }
+    }
+
   return;
 }
 
 void Mesh::UserWorkInLoop() {
   if(time == 0 && Globals::my_rank == 0) {
     std::cout << "Mesh::UserWorkInLoop called \n";
+  }
+
+
+  if (nonfinite_found) {
+    std::cout << "### stopping at cycle " << ncycle << ", t = " << time + dt
+              << std::endl;
+    std::raise(SIGTERM);
   }
 
   return;
