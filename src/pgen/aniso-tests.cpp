@@ -119,6 +119,7 @@ namespace{
 
   // check for blowups in unstable sims
   bool nonfinite_found = false;
+  Real dt_largest = 0.0;
 }; // namespace
 
 // Initialise functions
@@ -755,6 +756,18 @@ void Mesh::UserWorkInLoop() {
     std::cout << "Mesh::UserWorkInLoop called \n";
   }
 
+
+  // in Mesh::UserWorkInLoop()
+  // A step collapsed to a tiny fraction of the largest so far means a runaway (wave
+  // speeds blowing up, or dt -> 0): the run would never reach tlim.
+  dt_largest = std::max(dt_largest, dt);
+  const bool last_step = (time + dt >= tlim);
+  if (!last_step && !(dt > 1.0e-4*dt_largest)) {
+    std::cout << "### stopping at cycle " << ncycle << ", t = " << time + dt
+              << ": time step collapsed (dt = " << dt << ", largest " << dt_largest
+              << ")" << std::endl;
+    std::raise(SIGTERM);
+  }
 
   if (nonfinite_found) {
     std::cout << "### stopping at cycle " << ncycle << ", t = " << time + dt
@@ -1420,6 +1433,7 @@ void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
     case 6: { // ---- frozen-flow Peltier-Seebeck (+ Hall) ----
       Real AT = 0.0; Real ABy = 0.0; Real ABz = 0.0;
       T0 = P_0/rho_0;
+      PSModeAmplitudes(t, AT, ABy, ABz);
       for (int k = ks; k <= ke; k++) {
         for (int j = js; j <= je; j++) {
           for (int i = is; i <= ie; i++) {
