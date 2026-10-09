@@ -27,8 +27,8 @@ namespace ViscosityLimiters {
   // Monotonized-central limiter: minmod(2a, 2b, (a+b)/2)
   inline Real LimiterMC(const Real a, const Real b) {
     if (a*b <= 0.0) return 0.0;
-    return std::signbit(a)
-           *std::min(std::min(2.0*std::abs(a), 2.0*std::abs(b)), 0.5*std::abs(a + b));
+    return  std::copysign(1.0, a)
+            *std::min(std::min(2.0*std::abs(a), 2.0*std::abs(b)), 0.5*std::abs(a + b));
   }
   // ZuHone et al. 2015
   // _anisotropic_diffusion.pdf

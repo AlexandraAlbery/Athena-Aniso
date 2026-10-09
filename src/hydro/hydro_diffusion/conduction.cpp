@@ -29,8 +29,8 @@ namespace ConductionLimiters {
   // Monotonized-central limiter: minmod(2a, 2b, (a+b)/2)
   inline Real LimiterMC(const Real a, const Real b) {
     if (a*b <= 0.0) return 0.0;
-    return std::signbit(a)
-           *std::min(std::min(2.0*std::abs(a), 2.0*std::abs(b)), 0.5*std::abs(a + b));
+    return  std::copysign(1.0, a)
+            *std::min(std::min(2.0*std::abs(a), 2.0*std::abs(b)), 0.5*std::abs(a + b));
   }
   // SH1: P. Sharma & G.W. "Preserving Monotonicity in Anisotropic Diffusion",
   // Journal of Computational Physics, Nov. 2007, vol. 227, No. 1, pp. 123–142,
