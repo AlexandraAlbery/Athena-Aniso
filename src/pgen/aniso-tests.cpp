@@ -1352,6 +1352,9 @@ void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
       Real HII = (kappa_neu > 0.0) ? ion_frac : 1.0;
       Real rate = gm1*((1.0 - HII)*kappa_neu*k2
             + HII*(kappa_para*SQR(K_par) + kappa_perp*(k2 - SQR(K_par))));
+      if(pmb->phydro->hdif.kappa_iso > 0.0) { // stock athena
+        rate = gm1*pmb->phydro->hdif.kappa_iso*k2;
+      }
       amp = dT_amp*std::exp(-rate*t);
 
       for (int k = ks; k <= ke; k++) {
@@ -1485,6 +1488,11 @@ void VelocityErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
             + HII*(nu_para/3.0 + nu_perp1);
       Real M2 = (1.0 - HII)*nu_neu + 4.0*HII*nu_perp2;
       Real M3 = (1.0 - HII)*nu_neu + HII*nu_perp1;
+      if(pmb->phydro->hdif.nu_iso > 0.0) { // stock athena
+        M1 = zeta_bulk/rho_0 + (4.0/3.0)*pmb->phydro->hdif.nu_iso;
+        M2 = pmb->phydro->hdif.nu_iso;
+        M3 = pmb->phydro->hdif.nu_iso;
+      }
       Real A1 = a1*std::exp(-k2*M1*t); // along k
       Real A2 = a2*std::exp(-k2*M2*t); // along b
       Real A3 = a3*std::exp(-k2*M3*t); // along k x b
