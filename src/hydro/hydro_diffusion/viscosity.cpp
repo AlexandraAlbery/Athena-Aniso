@@ -39,7 +39,7 @@ namespace ViscosityLimiters {
                                 const Real up_L, const Real dn_L) {
     return LimiterMC(LimiterMC(up_R, dn_R), LimiterMC(up_L, dn_L));
   }
-  } // namespace ViscosityLimiters
+} // namespace ViscosityLimiters
 
 //----------------------------------------------------------------------------------------
 //! \fn void HydroDiffusion::ViscousFluxBulk

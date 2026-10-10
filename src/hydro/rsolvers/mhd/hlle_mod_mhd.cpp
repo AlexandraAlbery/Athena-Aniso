@@ -22,6 +22,59 @@
 #include "../../hydro.hpp"
 #include "../../hydro_diffusion/hydro_diffusion.hpp"
 
+namespace {
+  //--------------------------------------------------------------------------------------
+  //! \fn Real ScaleFactor
+  //! \brief Metric factors for derivatives
+  inline Real ScaleFactor(Coordinates *pco, const int d, const int j, const int i) {
+    return (d == 0) ? 1.0 : (d == 1) ? pco->h2v(i) : pco->h31v(i)*pco->h32v(j);
+  }
+
+  //--------------------------------------------------------------------------------------
+  //! \fn Real WedgeCondVector
+  //! \brief Component d (0,1,2 = x,y,z) of W = HII*rho*kappa_wedge*b at cell (k,j,i), the
+  //!  vector whose cross product with grad T is the Righi-Leduc heat flux (up to sign)
+  inline Real WedgeCondVector(MeshBlock *pmb, const int d, const int k, const int j,
+                              const int i) {
+    HydroDiffusion &hd = pmb->phydro->hdif;
+    const AthenaArray<Real> &bcc = pmb->pfield->bcc;
+    Real bmag = std::sqrt(SQR(bcc(IB1,k,j,i)) + SQR(bcc(IB2,k,j,i)) + SQR(bcc(IB3,k,j,i)));
+    return hd.ion_frac(k,j,i)*pmb->phydro->w(IDN,k,j,i)*hd.kappa(hd.kappa_wedge,k,j,i)
+          *bcc(IB1+d,k,j,i)/std::max(bmag, TINY_NUMBER);
+  }
+
+  //--------------------------------------------------------------------------------------
+  //! \fn Real WedgeCondVectorDeriv
+  //! \brief Centred derivative along coordinate d of h_c*W_c at cell (k,j,i): one leg of
+  //!  the circulation in the curl. Zero along a direction the mesh does not resolve
+  inline Real WedgeCondVectorDeriv(MeshBlock *pmb, const int d, const int c, const int k,
+                                  const int j, const int i) {
+    if ((d == 1 && pmb->block_size.nx2 == 1) || (d == 2 && pmb->block_size.nx3 == 1))
+      return 0.0;
+    const int di = (d == 0), dj = (d == 1), dk = (d == 2);
+    Coordinates *pco = pmb->pcoord;
+    Real span = (d == 0) ? pco->x1v(i+1) - pco->x1v(i-1)
+              : (d == 1) ? pco->x2v(j+1) - pco->x2v(j-1) : pco->x3v(k+1) - pco->x3v(k-1);
+    return (ScaleFactor(pco, c, j+dj, i+di)*WedgeCondVector(pmb, c, k+dk, j+dj, i+di)
+            - ScaleFactor(pco, c, j-dj, i-di)*WedgeCondVector(pmb, c, k-dk, j-dj, i-di))
+          /span;
+  }
+
+  //--------------------------------------------------------------------------------------
+  //! \fn Real RLDriftSpeed
+  //! \brief Righi-Leduc drift speed normal to the faces of sweep ivx at cell (k,j,i),
+  //!  |(gamma-1)/rho (curl W).n|
+  inline Real RLDriftSpeed(MeshBlock *pmb, const int ivx, const int k, const int j,
+                          const int i, const Real gm1) {
+    const int n = ivx - IVX, t1 = (n + 1)%3, t2 = (n + 2)%3;
+    Coordinates *pco = pmb->pcoord;
+    Real curl_n = (WedgeCondVectorDeriv(pmb, t1, t2, k, j, i)
+                  - WedgeCondVectorDeriv(pmb, t2, t1, k, j, i))
+                  /(ScaleFactor(pco, t1, j, i)*ScaleFactor(pco, t2, j, i));
+    return gm1*std::abs(curl_n)/pmb->phydro->w(IDN,k,j,i);
+  }
+} // namespace
+
 //----------------------------------------------------------------------------------------
 //! \fn void Hydro::RiemannSolver
 //! \brief HLLE with modified wave speeds for dispersive non-ideal terms
@@ -130,11 +183,11 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
       dxl = pco->dx1f(i-1);
       dxr = pco->dx1f(i);
     } else if (ivx == IVY) {
-      dxl = pco->dx2f(j-1);
-      dxr = pco->dx2f(j);
+      dxl = pco->h2v(i)*pco->dx2f(j-1);
+      dxr = pco->h2v(i)*pco->dx2f(j);
     } else {
-      dxl = pco->dx3f(k-1);
-      dxr = pco->dx3f(k);
+      dxl = pco->h31v(i)*pco->h32v(j)*pco->dx3f(k-1);
+      dxr = pco->h31v(i)*pco->h32v(j)*pco->dx3f(k);
     }
     Real dxf = 0.5*(dxl + dxr);
 
@@ -144,23 +197,9 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     Real nw2l = v_on ? hdif_.nu(hdif_.nu_wedge2,kl,jl,il)*HIIl : 0.0;
     Real nw2r = v_on ? hdif_.nu(hdif_.nu_wedge2,k,j,i)*HIIr : 0.0;
 
-    //--- Step 3c. Thermal Hall (right-Leduc) coefficeints
-    Real dta = 0.0; Real dtb = 0.0;
-    if (ivx == IVX) {
-      dta = pco->dx2f(j);
-      dtb = pco->dx3f(k);
-    } else if (ivx == IVY) {
-      dta = pco->dx3f(k);
-      dtb = pco->dx1f(i);
-    } else {
-      dta = pco->dx1f(i);
-      dtb = pco->dx2f(j);
-    }
-    Real curlb = 2.0/dta + 2.0/dtb;
-    Real kappawl = c_on ? hdif_.kappa(hdif_.kappa_wedge,kl,jl,il)
-                                     *hdif_.ion_frac(kl,jl,il) : 0.0;
-    Real kappawr = c_on ? hdif_.kappa(hdif_.kappa_wedge,k,j,i)
-                                     *hdif_.ion_frac(k,j,i) : 0.0;
+    //--- Step 3c. Righi-Leduc drift speed normal to the face, in the L and R cells
+    Real cTwl = c_on ? RLDriftSpeed(pmy_block, ivx, kl, jl, il, gm1) : 0.0;
+    Real cTwr = c_on ? RLDriftSpeed(pmy_block, ivx, k, j, i, gm1) : 0.0;
 
     // Compute fast-magnetosonic speed using eq. B18 (adiabatic) or B39 (isothermal)
     Real btsq = SQR(wroe[IBY]) + SQR(wroe[IBZ]);
@@ -187,7 +226,6 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     Real dkJroe  = 0.5*(dkappaJl + dkappaJr);
     Real nw1roe  = 0.5*(nw1l + nw1r);
     Real nw2roe  = 0.5*(nw2l + nw2r);
-    Real kapwroe = 0.5*(kappawl + kappawr);
     Real eintroe = NON_BAROTROPIC_EOS
                   ? 0.5*(wli[IPR] + wri[IPR])/gm1
                   : 0.5*(wli[IDN] + wri[IDN])*iso_cs*iso_cs/gm1;
@@ -195,7 +233,7 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
                 ? dkJroe*dkJroe/(eintroe*dxf*dxf)
                 : 0.0;
     Real Eroe = etaHroe*etaHroe/(dxf*dxf);
-    Real aTw = gm1*curlb*kapwroe;
+    Real aTw = 0.5*(cTwl + cTwr);  // face curl (Stokes) is the mean of the L and R ones
     Real aw = 0.5*(etaHroe/dxf + std::sqrt(etaHroe*etaHroe/(dxf*dxf) + 4.0*vaxsq));
     Real ae = std::sqrt(a*a + Droe/4.0) + aTw;
     Real af = std::sqrt(std::max(a,aw)*std::max(a,aw) + Droe/4.0
@@ -260,10 +298,6 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
 
     Real cgvl = cl + std::sqrt(Gl)/dxl;
     Real cgvr = cr + std::sqrt(Gr)/dxr;
-
-    // Thermal hall (right_Leduc) velocity (Internal Energy)
-    Real cTwl = gm1*curlb*kappawl;
-    Real cTwr = gm1*curlb*kappawr;
 
     //--- Step 4. Compute the max/min wave speeds based on L/R and Roe-averaged values
 
