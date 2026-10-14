@@ -1,28 +1,104 @@
-athena
-======
-<!-- Jenkins Status Badge in Markdown (with view), unprotected, flat style -->
-<!-- In general, need to be on Princeton VPN, logged into Princeton CAS, with ViewStatus access to Jenkins instance to click on unprotected Build Status Badge, but server is configured to whitelist GitHub -->
-<!-- [![Jenkins Build Status](https://jenkins.princeton.edu/buildStatus/icon?job=athena/PrincetonUniversity_athena_jenkins_master)](https://jenkins.princeton.edu/job/athena/job/PrincetonUniversity_athena_jenkins_master/) -->
-[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.11660592.svg)](https://doi.org/10.5281/zenodo.11660592)
-[![codecov](https://codecov.io/gh/PrincetonUniversity/athena/branch/master/graph/badge.svg?token=ZzniY084kP)](https://codecov.io/gh/PrincetonUniversity/athena)
-[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.0-4baaaa.svg)](code_of_conduct.md)
+# Athena-Aniso
 
-<!--[![Public GitHub  issues](https://img.shields.io/github/issues/PrincetonUniversity/athena-public-version.svg)](https://github.com/PrincetonUniversity/athena-public-version/issues)
-[![Public GitHub pull requests](https://img.shields.io/github/issues-pr/PrincetonUniversity/athena-public-version.svg)](https://github.com/PrincetonUniversity/athena-public-version/pulls) -->
+**Braginskii anisotropic transport for [Athena++](https://github.com/PrincetonUniversity/athena).**
 
-<p align="center">
-	  <img width="345" height="345" src="https://user-images.githubusercontent.com/1410981/115276281-759d8580-a108-11eb-9fc9-833480b97f95.png">
-</p>
+Athena-Aniso extends the Athena++ MHD code with collisional Braginskii transport (anisotropic thermal conduction, anisotropic and gyro-viscosity, the Hall effect and thermoelectric effects) plus bulk viscosity, together with the time-step limits, super-time-stepping split and Riemann-solver signal speeds needed to run them stably. In partially ionised gas, neutrals diffuse isotropically and ions anisotropically, weighted by the local ionisation fraction.
 
-Athena++ radiation GRMHD code and adaptive mesh refinement (AMR) framework
+[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
+<!-- Once a release is archived on Zenodo:
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX) -->
 
-Please read [our contributing guidelines](./CONTRIBUTING.md) for details on how to participate.
+This is the code for [Author] (in prep.), *[Paper title]*. It is built on Athena++ (upstream commit `<hash>`); for everything inherited from Athena++ (AMR, coordinate systems, the ideal MHD solvers, I/O) see the [Athena++ documentation](https://github.com/PrincetonUniversity/athena/wiki).
 
-## Citation
-To cite Athena++ in your publication, please use the following BibTeX to refer to the code's [method paper](https://ui.adsabs.harvard.edu/abs/2020ApJS..249....4S/abstract):
+## What Athena-Aniso adds
+
+**Transport.** Every new coefficient defaults to zero; a term is switched on by giving its coefficient a positive value in the input file.
+
+| Process | Components | Effects |
+|---|---|---|
+| Thermal conduction | parallel, perpendicular, cross | anisotropic conduction, Righi–Leduc |
+| Shear viscosity | five Braginskii terms | parallel, perpendicular and gyroviscous stress |
+| Bulk viscosity | isotropic | molecular gas |
+| Thermoelectric heat flux | parallel, perpendicular, cross | Peltier, Ettingshausen |
+| Thermoelectric force (EMF) | parallel, perpendicular, cross | Seebeck, Nernst |
+| Hall effect | $\eta_{\text{H}}\vec{J}\times\hat{b}$ EMF | whistler waves |
+| Partial ionisation | conduction, viscosity | isotropic neutrals, anisotropic ions |
+
+**Numerics.**
+
+- Analytic time-step limits for every Braginskii term, with separate parabolic and dispersive time steps.
+- A split compatible with super-time-stepping: parabolic parts can be integrated with Athena++'s RKL integrators, while dispersive terms (Hall, Righi–Leduc, gyroviscosity, and Peltier/Seebeck) stay with the main integrator.
+- HLL-Mod: HLLE with per-variable signal speeds that include the dispersive waves (whistler, thermoelectric, gyroviscous), extending the Hall-HLL approach of Lesur et al. (2014).
+
+The equations, sign conventions, units and problem-generator interface for the transport terms are in **[diffusion.md](diffusion.md)**.
+
+## Quick start
+
+Build requirements are the same as for Athena++.
+
+```bash
+git clone https://github.com/AlexandraAlbery/Athena-Aniso.git
+cd Athena-Aniso
+python configure.py --prob=<problem> -b   # -b (MHD): the anisotropic, Hall and thermoelectric terms need B
+make clean && make -j
+./bin/athena -i <path/to/athinput>
 ```
+
+- **Super-time-stepping:** configure with `-sts` and set `sts_integrator = rkl1` or `rkl2` in the `<time>` block, as in Athena++.
+- **HLL-Mod:** configure with `--flux = hlle_mod`
+
+Switch transport terms on in the `<problem>` block of the input file:
+
+```
+<problem>
+kappa_iso                = 1.0   # Isotropic Thermal Conduction (Stock Athena++)
+nu_iso                   = 1.0   # Isotropic Viscoisty (Stock Athena++)
+eta_ohm                  = 1.0   # Ohmic Resistivity (Stock Athena++)
+eta_ad                   = 1.0   # Ambipolar Diffusion (Stock Athena++)
+kappa_aniso_neutral      = 1.0   # Neutral Thermal Conduction
+kappa_aniso_para         = 1.0   # Parallel Thermal Conduction
+kappa_aniso_perp         = 1.0   # Perpendicular Thermal Conduction
+kappa_aniso_wedge        = 1.0   # Wedge Thermal Conduction (Righi-Leduc Effect)
+nu_aniso_neutral         = 1.0   # Neutral viscosity
+nu_aniso_para            = 1.0   # Parallel (Pi0) Viscosity
+nu_aniso_perp1           = 1.0   # Perpendicular (Pi1) Viscosity
+nu_aniso_perp2           = 1.0   # Perpendicular (Pi2) Viscosity
+nu_aniso_wedge1          = 1.0   # Wedge (Pi3) Gyro-Viscosity
+nu_aniso_wedge2          = 1.0   # Wedge (Pi4) Gyro-Viscosity
+zeta_bulk                = 1.0   # Bulk Viscosity
+eta_hall                 = 1.0   # Hall Effect
+kappa_aniso_TE_para      = 1.0   # Parallel Thermoelectric Effects (Peltier + Seebeck Effects)
+kappa_aniso_TE_perp      = 1.0   # Perpendicular Thermoelectric Effects (Peltier + Seebeck Effects)
+kappa_aniso_TE_wedge     = 1.0   # Wedge Thermoelectric Effects (Nernst + Ettingshausen Effects)
+ion_frac_const           = 1.0   # Constant Ionisation Fraction
+debug_therm_conduct_only = false # Only Thermoelectric Conduction (Peltier + Ettingshausen Effects) debug only!
+debug_therm_force_only   = false # Only Thermoelectric Force (Seebeck + Nernst Effects) debug only!
+```
+
+Coefficients that vary in space or time are set cell by cell in the functions enrolled with `EnrollConductionCoefficient` for thermal conduction, `EnrollViscosityCoefficient` for viscoisty, and `EnrollFieldDiffusivity` for the Hall and thermoelectric effects. See [diffusion.md](diffusion.md).
+
+## Verification
+
+The test problems from the paper run in 3D Cartesian geometry with a single mode along x. The problem generator is `src/pgen/aniso-tests.cpp`, with input files in `inputs/mhd/athinput.aniso-tets`.
+
+| Case | Test |
+|---|---|
+| 0–6 | convergence to analytical solutions, covering every transport term |
+| 7 | HLL-Mod suppressing grid-scale instability at RK3, for the Righi–Leduc, gyroviscous, Hall and Peltier–Seebeck terms, singly and combined |
+| 8 | time-step sweep |
+
+## Citing Athena-Aniso
+
+If you use Athena-Aniso, please cite the method paper and Athena++:
+
+```bibtex
+@unpublished{AthenaAniso,
+  author = {Alexandra F. Albery and Julian M. Pittard},
+  title  = {Von Neumann Stability Analysis of Braginskii MHD: Thermal Conduction, Viscosity, Magnetic Diffusion, and Thermoelectric Effects - An Implementation in Athena++},
+  year   = {2026},
+  note   = {in prep.}
+}
+
 @article{Stone2020,
 	doi = {10.3847/1538-4365/ab929b},
 	url = {https://doi.org/10.3847%2F1538-4365%2Fab929b},
@@ -37,19 +113,13 @@ To cite Athena++ in your publication, please use the following BibTeX to refer t
 	journal = {The Astrophysical Journal Supplement Series},
 }
 ```
-Additionally, you can add a reference to `https://github.com/PrincetonUniversity/athena` in a footnote.
 
-Finally, we have minted DOIs for each released version of Athena++ on Zenodo. This practice encourages computational reproducibility, since you can specify exactly which version of the code was used to produce the results in your publication. `10.5281/zenodo.4455879` is the DOI which cites _all_ versions of the code; it will always resolve to the latest release. Click on the Zenodo badge above to get access to BibTeX, etc. info related to these DOIs, e.g.:
+<!-- Once archived: to cite the exact version used, also cite its Zenodo DOI (10.5281/zenodo.XXXXXXX). -->
 
-```
-@software{athena,
-  author       = {Athena++ development team},
-  title        = {PrincetonUniversity/athena: Athena++ v24.0},
-  month        = jun,
-  year         = 2024,
-  publisher    = {Zenodo},
-  version      = {24.0},
-  doi          = {10.5281/zenodo.11660592},
-  url          = {https://doi.org/10.5281/zenodo.11660592}
-}
-```
+## Relationship to Athena++
+
+Athena-Aniso is a modified version of Athena++ and is not an official Athena++ release. Please report problems with it on this repository's [issue tracker](https://github.com/AlexandraAlbery/Athena-Aniso/issues) rather than to the Athena++ developers.
+
+## License
+
+BSD 3-Clause, the same as Athena++. The original Athena++ copyright notice is kept in [LICENSE](LICENSE).

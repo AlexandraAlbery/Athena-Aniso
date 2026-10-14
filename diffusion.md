@@ -194,4 +194,4 @@ L, T and M denote length, time and mass.
 
 - Braginskii, S. I. 1965, *Reviews of Plasma Physics*, 1, 205
 - Stone, J. M., Tomida, K., White, C. J. & Felker, K. G. 2020, ApJS, 249, 4
-- [Author] (in prep.), *[Paper title]*
+- Albery, A. F, Pittard, J. M (in prep.), *Von Neumann Stability Analysis of Braginskii MHD: Thermal Conduction, Viscosity, Magnetic Diffusion, and Thermoelectric Effects - An implementation in Athena++*
