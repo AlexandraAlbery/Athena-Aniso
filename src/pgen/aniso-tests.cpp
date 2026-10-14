@@ -88,6 +88,10 @@ namespace{
   // case 4
   Real kB = 0; // Beltrami wavenumber
 
+  // caSE 7
+  Real dT_noise = 0.0; Real dv_noise = 0.0; Real dB_noise = 0.0;  // rms of noise
+  bool beltrami = false; // case 4's field instead of a uniform one
+
   // Array index for hdf5 output
   const int out_T      = 0;  // temperature
   const int out_sound    = 1;  // adiabatic sound speed
@@ -156,6 +160,48 @@ void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf);
 void VelocityErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf);
 void FieldErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf);
 void PSModeAmplitudes(Real t, Real &AT, Real &ABy, Real &ABz);
+void WhiteNoise(int n1, int n2, int n3, Real dx1, Real dx2, Real dx3, std::int64_t seed,
+                bool curl, std::vector<Real> &f);
+
+#ifdef FFT
+//----------------------------------------------------------------------------------------
+//! \fn void WhiteNoise
+//! \brief Zero-mean Gaussian white noise on the whole n1 x n2 x n3 mesh, stored
+//!  f[(k*n2 + j)*n1 + i] and made from seed alone
+void WhiteNoise(int n1, int n2, int n3, Real dx1, Real dx2, Real dx3, std::int64_t seed,
+                bool curl, std::vector<Real> &f) {
+  const int n = n1*n2*n3, nh = n1/2 + 1;  // r2c keeps i = 0 ... n1/2 of the last index
+  double *r = fftw_alloc_real(n);
+  fftw_complex *c = fftw_alloc_complex(n3*n2*nh);
+  fftw_plan fwd = fftw_plan_dft_r2c_3d(n3, n2, n1, r, c, FFTW_ESTIMATE);
+  fftw_plan bwd = fftw_plan_dft_c2r_3d(n3, n2, n1, c, r, FFTW_ESTIMATE);
+
+  std::int64_t idum = -seed;  // a negative seed restarts ran2's sequence
+  for (int m = 0; m < n; ++m) {  // Box-Muller: unit-variance Gaussian in every cell
+    Real u1 = ran2(&idum), u2 = ran2(&idum);
+    r[m] = std::sqrt(-2.0*std::log(u1))*std::cos(2.0*PI*u2);
+  }
+  fftw_execute(fwd);
+  for (int k = 0; k < n3; ++k) {
+    for (int j = 0; j < n2; ++j) {
+      for (int i = 0; i < nh; ++i) {
+        Real k2 = SQR(2.0/dx1*std::sin(PI*i/n1)) + SQR(2.0/dx2*std::sin(PI*j/n2))
+                + SQR(2.0/dx3*std::sin(PI*k/n3));  // zero only for the mean
+        Real w = (k2 > 0.0) ? (curl ? 1.0/std::sqrt(k2) : 1.0)/n : 0.0;  // 1/n: FFTW's
+        c[(k*n2 + j)*nh + i][0] *= w;                                    // scaling
+        c[(k*n2 + j)*nh + i][1] *= w;
+      }
+    }
+  }
+  fftw_execute(bwd);
+  f.assign(r, r + n);
+
+  fftw_destroy_plan(fwd);
+  fftw_destroy_plan(bwd);
+  fftw_free(r);
+  fftw_free(c);
+}
+#endif
 
 void Mesh::InitUserMeshData(ParameterInput *pin) {
   if(!MAGNETIC_FIELDS_ENABLED) {
@@ -623,7 +669,127 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           break;}
         // ---- Temp / Vel / Field white noise (?) for HLLE-mod ----
         case 7: {
-          // WIP
+            // As Iwasaki & Tomida (2025, sec. 3.2): uniform rho_0, P_0, at rest, in the
+          // field (Bx_0, By_0, Bz_0) or, with beltrami, case 4's field of that size; plus
+          // zero-mean Gaussian white noise with cell-centred rms dT_noise in T (uniform
+          // density), dv_noise in |v| and dB_noise in |B|. The field noise is the curl of
+          // a vector potential on the cell edges (div B = 0 to round-off), each mode of A
+          // divided by |k~| so B is white. Every MeshBlock makes the whole noise from
+          // noise_seed and keeps its own part: the same for any MeshBlocks or ranks.
+          #ifdef FFT
+          T0 = P_0/rho_0;
+          B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
+          kB = 2.0*PI/(zmax - zmin);
+          dT_noise = pin->GetOrAddReal("problem","dT_noise", 0.0);
+          dv_noise = pin->GetOrAddReal("problem","dv_noise", 0.0);
+          dB_noise = pin->GetOrAddReal("problem","dB_noise", 0.0);
+          beltrami = pin->GetOrAddBoolean("problem","beltrami", false);
+          std::int64_t seed = pin->GetOrAddInteger("problem","noise_seed", 1);
+
+          const int n1 = pmy_mesh->mesh_size.nx1, n2 = pmy_mesh->mesh_size.nx2;
+          const int n3 = pmy_mesh->mesh_size.nx3, n = n1*n2*n3;
+          const Real dx1 = (xmax - xmin)/n1, dx2 = (ymax - ymin)/n2;
+          const Real dx3 = (zmax - zmin)/n3;
+          // offsets from this block's cell indices to the whole mesh's, and the
+          // whole-mesh index of cell (k,j,i), periodic
+          const int o1 = static_cast<int>(loc.lx1)*block_size.nx1 - is;
+          const int o2 = static_cast<int>(loc.lx2)*block_size.nx2 - js;
+          const int o3 = static_cast<int>(loc.lx3)*block_size.nx3 - ks;
+          auto at = [=](int k, int j, int i) {
+            return (((k + n3)%n3)*n2 + (j + n2)%n2)*n1 + (i + n1)%n1; };
+
+          std::vector<Real> dT(n, 0.0), v1(n, 0.0), v2(n, 0.0), v3(n, 0.0);
+          std::vector<Real> b1(n, 0.0), b2(n, 0.0), b3(n, 0.0);  // on the faces
+          if (dT_noise > 0.0) {
+            WhiteNoise(n1, n2, n3, dx1, dx2, dx3, seed, false, dT);
+            Real s = 0.0;
+            for (int m = 0; m < n; ++m) s += SQR(dT[m]);
+            s = dT_noise/std::sqrt(s/n);
+            for (int m = 0; m < n; ++m) dT[m] *= s;
+          }
+          if (dv_noise > 0.0) {
+            WhiteNoise(n1, n2, n3, dx1, dx2, dx3, seed + 1, false, v1);
+            WhiteNoise(n1, n2, n3, dx1, dx2, dx3, seed + 2, false, v2);
+            WhiteNoise(n1, n2, n3, dx1, dx2, dx3, seed + 3, false, v3);
+            Real s = 0.0;
+            for (int m = 0; m < n; ++m) s += SQR(v1[m]) + SQR(v2[m]) + SQR(v3[m]);
+            s = dv_noise/std::sqrt(s/n);
+            for (int m = 0; m < n; ++m) {
+              v1[m] *= s; v2[m] *= s; v3[m] *= s;
+            }
+          }
+          if (dB_noise > 0.0) {
+            // A on the edges: A1 at (x1v,x2f,x3f), A2 (x1f,x2v,x3f), A3 (x1f,x2f,x3v)
+            std::vector<Real> A1, A2, A3;
+            WhiteNoise(n1, n2, n3, dx1, dx2, dx3, seed + 4, true, A1);
+            WhiteNoise(n1, n2, n3, dx1, dx2, dx3, seed + 5, true, A2);
+            WhiteNoise(n1, n2, n3, dx1, dx2, dx3, seed + 6, true, A3);
+            for (int k = 0; k < n3; ++k) {
+              for (int j = 0; j < n2; ++j) {
+                for (int i = 0; i < n1; ++i) {  // B = curl A on the faces
+                  int m = at(k,j,i);
+                  b1[m] = (A3[at(k,j+1,i)] - A3[m])/dx2 - (A2[at(k+1,j,i)] - A2[m])/dx3;
+                  b2[m] = (A1[at(k+1,j,i)] - A1[m])/dx3 - (A3[at(k,j,i+1)] - A3[m])/dx1;
+                  b3[m] = (A2[at(k,j,i+1)] - A2[m])/dx1 - (A1[at(k,j+1,i)] - A1[m])/dx2;
+                }
+              }
+            }
+            Real s = 0.0;  // rms of the cell-centred field, the mean of the two faces
+            for (int k = 0; k < n3; ++k) {
+              for (int j = 0; j < n2; ++j) {
+                for (int i = 0; i < n1; ++i) {
+                  int m = at(k,j,i);
+                  s += SQR(0.5*(b1[m] + b1[at(k,j,i+1)]))
+                    + SQR(0.5*(b2[m] + b2[at(k,j+1,i)]))
+                    + SQR(0.5*(b3[m] + b3[at(k+1,j,i)]));
+                }
+              }
+            }
+            s = dB_noise/std::sqrt(s/n);
+            for (int m = 0; m < n; ++m) {
+              b1[m] *= s; b2[m] *= s; b3[m] *= s;
+            }
+          }
+
+          for (int k = ks; k <= ke; k++ )
+              for (int j = js; j <= je; j++ )
+                  for (int i = is; i <= ie+1; i++ )
+                      pfield->b.x1f(k,j,i) = b1[at(k+o3,j+o2,i+o1)] + (beltrami
+                                          ? B0_mag*std::cos(kB*pcoord->x3v(k)) : Bx_0);
+          for (int k = ks; k <= ke; k++ )
+              for (int j = js; j <= je+1; j++ )
+                  for (int i = is; i <= ie; i++ )
+                      pfield->b.x2f(k,j,i) = b2[at(k+o3,j+o2,i+o1)] + (beltrami
+                                          ? B0_mag*std::sin(kB*pcoord->x3v(k)) : By_0);
+          for (int k = ks; k <= ke+1; k++ )
+              for (int j = js; j <= je; j++ )
+                  for (int i = is; i <= ie; i++ )
+                      pfield->b.x3f(k,j,i) = b3[at(k+o3,j+o2,i+o1)]
+                                          + (beltrami ? 0.0 : Bz_0);
+
+          for (int kk = ks; kk <= ke; kk++ ) {
+              for (int j = js; j <= je; j++ ) {
+                  for (int i = is; i <= ie; i++ ) {
+                      int m = at(kk+o3,j+o2,i+o1);
+                      Real bx = 0.5*(pfield->b.x1f(kk,j,i) + pfield->b.x1f(kk,j,i+1));
+                      Real by = 0.5*(pfield->b.x2f(kk,j,i) + pfield->b.x2f(kk,j+1,i));
+                      Real bz = 0.5*(pfield->b.x3f(kk,j,i) + pfield->b.x3f(kk+1,j,i));
+                      phydro->u(IDN,kk,j,i) = rho_0; // uniform density
+                      phydro->u(IM1,kk,j,i) = rho_0*v1[m];
+                      phydro->u(IM2,kk,j,i) = rho_0*v2[m];
+                      phydro->u(IM3,kk,j,i) = rho_0*v3[m];
+                      phydro->u(IEN,kk,j,i) = rho_0*(T0 + dT[m])/gm1
+                                + 0.5*rho_0*(SQR(v1[m]) + SQR(v2[m]) + SQR(v3[m]))
+                                + 0.5*(bx*bx + by*by + bz*bz);
+                  }
+              }
+          }
+          #else
+          std::stringstream msg;
+          msg << "### FATAL ERROR in ProblemGenerator case 7" << std::endl
+              << "the white noise needs FFTW: configure with -fft" << std::endl;
+          ATHENA_ERROR(msg);
+          #endif
           break;}
         // ---- (T, rho, |B|) sweep for the timestep check ----
         case 8: {
@@ -1451,6 +1617,22 @@ void TemperatureErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
         }
       }
       break;}
+    case 7: { // ---- white noise: the rms of T - T0, if T was seeded ----
+      if (dT_noise <= 0.0) break;
+      T0 = P_0/rho_0;
+      for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+          for (int i = is; i <= ie; i++) {
+            Real Tn  = pmb->phydro->w(IPR,k,j,i)/pmb->phydro->w(IDN,k,j,i);
+            Real err = std::abs(Tn - T0);
+            Real dV  = pco->GetCellVolume(k,j,i);
+            l1   += err*dV;
+            l2sq += err*err*dV;
+            linf  = std::max(linf, err);
+          }
+        }
+      }
+      break;}
     default:
       break;
   }
@@ -1538,6 +1720,24 @@ void VelocityErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
             Real dvy = std::abs(pmb->phydro->w(IVY,k,j,i) - (Ay*sx + Cy*sz));
             Real dvz = std::abs(0.0 - pmb->phydro->w(IVZ,k,j,i));
             Real err = std::sqrt(SQR(dvx) + SQR(dvy) + SQR(dvz));
+            Real dV  = pco->GetCellVolume(k,j,i);
+            l1   += err*dV;
+            l2sq += err*err*dV;
+            linf  = std::max(linf, err);
+          }
+        }
+      }
+      break;
+    }
+    // Case 7 - white noise: the rms of |v|, if v was seeded
+    case 7: {
+      if (dv_noise <= 0.0) break;
+      for (int k = ks; k <= ke; k++) {
+        for (int j = js; j <= je; j++) {
+          for (int i = is; i <= ie; i++) {
+            Real err = std::sqrt(SQR(pmb->phydro->w(IVX,k,j,i))
+                                  + SQR(pmb->phydro->w(IVY,k,j,i))
+                                  + SQR(pmb->phydro->w(IVZ,k,j,i)));
             Real dV  = pco->GetCellVolume(k,j,i);
             l1   += err*dV;
             l2sq += err*err*dV;
@@ -1679,6 +1879,24 @@ void FieldErrors(MeshBlock *pmb, Real &l1, Real &l2sq, Real &linf) {
       }
     }
   }
+  // Case 7 - white noise: the rms of |B - B_background|, if B was seeded
+  if (problem_ID == 7 && dB_noise > 0.0) {
+    for (int k = ks; k <= ke; k++) {
+      Real cz = std::cos(kB*pco->x3v(k)), sz = std::sin(kB*pco->x3v(k));
+      for (int j = js; j <= je; j++) {
+        for (int i = is; i <= ie; i++) {
+          Real dbx = pmb->pfield->bcc(IB1,k,j,i) - (beltrami ? B0_mag*cz : Bx_0);
+          Real dby = pmb->pfield->bcc(IB2,k,j,i) - (beltrami ? B0_mag*sz : By_0);
+          Real dbz = pmb->pfield->bcc(IB3,k,j,i) - (beltrami ? 0.0 : Bz_0);
+          Real err = std::sqrt(SQR(dbx) + SQR(dby) + SQR(dbz));
+          Real dV  = pco->GetCellVolume(k,j,i);
+          l1   += err*dV;
+          l2sq += err*err*dV;
+          linf  = std::max(linf, err);
+        }
+      }
+    }
+  }
   return;
 }
 
@@ -1745,7 +1963,6 @@ Real FieldLInf(MeshBlock *pmb, int iout) {
   return linf;
 }
 
-void PSModeAmplitudes(Real t, Real &AT, Real &ABy, Real &ABz);
 //----------------------------------------------------------------------------------------
 //! \fn void PSModeAmplitudes
 //! \brief Case 6 amplitudes from the sympy solution (frozen flow, Peltier-Seebeck with
