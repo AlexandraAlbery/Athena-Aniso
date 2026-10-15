@@ -88,7 +88,7 @@ namespace{
   // case 4
   Real kB = 0; // Beltrami wavenumber
 
-  // caSE 7
+  // case 7
   Real dT_noise = 0.0; Real dv_noise = 0.0; Real dB_noise = 0.0;  // rms of noise
   bool beltrami = false; // case 4's field instead of a uniform one
 
@@ -163,6 +163,7 @@ void PSModeAmplitudes(Real t, Real &AT, Real &ABy, Real &ABz);
 void WhiteNoise(int n1, int n2, int n3, Real dx1, Real dx2, Real dx3, std::int64_t seed,
                 bool curl, std::vector<Real> &f);
 
+// ---- 3. before MeshBlock::ProblemGenerator --------------------------------------------
 #ifdef FFT
 //----------------------------------------------------------------------------------------
 //! \fn void WhiteNoise
@@ -669,13 +670,9 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           break;}
         // ---- Temp / Vel / Field white noise (?) for HLLE-mod ----
         case 7: {
-            // As Iwasaki & Tomida (2025, sec. 3.2): uniform rho_0, P_0, at rest, in the
-          // field (Bx_0, By_0, Bz_0) or, with beltrami, case 4's field of that size; plus
-          // zero-mean Gaussian white noise with cell-centred rms dT_noise in T (uniform
-          // density), dv_noise in |v| and dB_noise in |B|. The field noise is the curl of
-          // a vector potential on the cell edges (div B = 0 to round-off), each mode of A
-          // divided by |k~| so B is white. Every MeshBlock makes the whole noise from
-          // noise_seed and keeps its own part: the same for any MeshBlocks or ranks.
+          // uniform rho_0, P_0, at rest, in the field Bx_0 or case 4's field of that size
+          // zero-mean Gaussian white noise with cell-centred rms
+          // The field noise is the curl of a vector potential on the cell edges divB = 0
           #ifdef FFT
           T0 = P_0/rho_0;
           B0_mag = std::sqrt(SQR(Bx_0) + SQR(By_0) + SQR(Bz_0));
@@ -838,7 +835,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     << "4 - Righi-Leduc: Beltrami field + transverse T mode \n"
     << "5 - Gyroviscosity: Pi3 across b, Pi4 along b \n"
     << "6 - Peltier-Seebeck (+ Hall) \n"
-    << "7 - Timestep checks \n";
+    << "7 - White noise HLLE-Mod test"
+    << "8 - Timestep checks \n";
     exit(-1);
   }
 
