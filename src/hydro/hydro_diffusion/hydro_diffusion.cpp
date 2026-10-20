@@ -395,10 +395,9 @@ void HydroDiffusion::NewDiffusionDt(Real &dt_vis, Real &dt_cnd, Real &dt_vis_dis
   else if (f2) fac = 0.25;
   else         fac = 0.5;
 
-  // Righi-Leduc (wedge) conduction (RK3+) sqrt(3)/2d
-  if (f3)      fac_RL = 0.2886751346;
-  else if (f2) fac_RL = 0.4330127019;
-  else         fac_RL = 0.8660254038;
+  // Righi-Leduc (wedge) conduction (RK3+): sqrt(3)/2
+  // dimension enters via sum_d 1/(dx_d Dperp_d)
+  fac_RL = 0.8660254038;
 
   // gyro-viscosity (RK3+) sqrt(3)/4d
   if (f3)      fac_gyro = 0.1443375673;
@@ -448,14 +447,15 @@ void HydroDiffusion::NewDiffusionDt(Real &dt_vis, Real &dt_cnd, Real &dt_vis_dis
               p1 = dx1(i)/(1.0/dx2(i) + 1.0/dx3(i));
               p2 = dx2(i)/(1.0/dx1(i) + 1.0/dx3(i));
               p3 = dx3(i)/(1.0/dx1(i) + 1.0/dx2(i));
-              len_perp = std::min(p1, std::min(p2, p3));
-              inv_dt_cnd_disp(k,j,i) += 1.0 / (static_cast<Real>(
-                                               len_perp*fac_RL/(kappa_t_disp(i)
-                                                + TINY_NUMBER)));
-              inv_dt_cnd(k,j,i) += inv_dt_cnd_disp(k,j,i);
+              Real sum_inv_p = 1.0/p1;
+              if (f2) sum_inv_p += 1.0/p2;
+              if (f3) sum_inv_p += 1.0/p3;
+              Real inv_dt_RL = kappa_t_disp(i)*sum_inv_p/fac_RL;
+              inv_dt_cnd_disp(k,j,i) += inv_dt_RL;
+              inv_dt_cnd(k,j,i) += inv_dt_RL;
               dt_cnd_disp = std::min<Real>(dt_cnd_disp, 1.0 / inv_dt_cnd_disp(k,j,i));
-              }
             }
+          }
         kappa_t(i) *= gm1;
         inv_dt_cnd(k,j,i) += 1.0 / (static_cast<Real>(
                                   SQR(len)*fac/(kappa_t(i) + TINY_NUMBER)));
