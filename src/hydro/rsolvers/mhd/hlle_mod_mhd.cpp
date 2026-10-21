@@ -48,16 +48,26 @@ namespace {
   //! \brief Centred derivative along coordinate d of h_c*W_c at cell (k,j,i): one leg of
   //!  the circulation in the curl. Zero along a direction the mesh does not resolve
   inline Real WedgeCondVectorDeriv(MeshBlock *pmb, const int d, const int c, const int k,
-                                  const int j, const int i) {
-    if ((d == 1 && pmb->block_size.nx2 == 1) || (d == 2 && pmb->block_size.nx3 == 1))
-      return 0.0;
-    const int di = (d == 0), dj = (d == 1), dk = (d == 2);
+    const int j, const int i) {
     Coordinates *pco = pmb->pcoord;
-    Real span = (d == 0) ? pco->x1v(i+1) - pco->x1v(i-1)
-              : (d == 1) ? pco->x2v(j+1) - pco->x2v(j-1) : pco->x3v(k+1) - pco->x3v(k-1);
+    if ((d == 1 && pmb->block_size.nx2 == 1) || (d == 2 && pmb->block_size.nx3 == 1)) {
+    // only h_3 = h31(x1)*h32(x2) varies along an unresolved direction (x2)
+      if (d == 1 && c == 2)
+        return pco->h31v(i)*pco->dh32vd2(j)*WedgeCondVector(pmb, c, k, j, i);
+      return 0.0;
+    }
+    const int di = (d == 0), dj = (d == 1), dk = (d == 2);
+    Real span = 0.0;
+    if (d == 0) {
+      span = pco->x1v(i+1) - pco->x1v(i-1);
+    } else if (d == 1) {
+      span = pco->x2v(j+1) - pco->x2v(j-1);
+    } else {
+      span = pco->x3v(k+1) - pco->x3v(k-1);
+    }
     return (ScaleFactor(pco, c, j+dj, i+di)*WedgeCondVector(pmb, c, k+dk, j+dj, i+di)
-            - ScaleFactor(pco, c, j-dj, i-di)*WedgeCondVector(pmb, c, k-dk, j-dj, i-di))
-          /span;
+           -ScaleFactor(pco, c, j-dj, i-di)*WedgeCondVector(pmb, c, k-dk, j-dj, i-di))
+           /span;
   }
 
   //--------------------------------------------------------------------------------------
