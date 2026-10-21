@@ -174,8 +174,15 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
 
     Real cl = pmy_block->peos->FastMagnetosonicSpeed(wli,bxi);
     Real cr = pmy_block->peos->FastMagnetosonicSpeed(wri,bxi);
-    Real cal = pmy_block->peos->AlfvenSpeed(wli,bxi);
-    Real car = pmy_block->peos->AlfvenSpeed(wri,bxi);
+
+    // Orientation-maximised fast and total Alfven speeds, as assumed by the c_TEw
+    // bound: c_f,max^2 = (gamma P + |B|^2)/rho, c_a = |B|/sqrt(rho); pbl includes bx^2
+    Real asql = NON_BAROTROPIC_EOS ? (gm1 + 1.0)*wli[IPR]/wli[IDN] : iso_cs*iso_cs;
+    Real asqr = NON_BAROTROPIC_EOS ? (gm1 + 1.0)*wri[IPR]/wri[IDN] : iso_cs*iso_cs;
+    Real catl = std::sqrt(2.0*pbl/wli[IDN]);
+    Real catr = std::sqrt(2.0*pbr/wri[IDN]);
+    Real cfml = std::sqrt(asql + catl*catl);
+    Real cfmr = std::sqrt(asqr + catr*catr);
 
     //--- Step 3a. Hall+Peltier/Seebeck coefficeints
     Real etaHl = f_on ? std::abs(fdif_.etaB(fdif_.hall,kl,jl,il)) : 0.0;
@@ -230,6 +237,7 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     Real cf2_cs2 = std::sqrt(tdif*tdif + 4.0*twid_asq*ct2);
     Real cfsq = 0.5*(tsum + cf2_cs2);
     Real a = std::sqrt(cfsq);
+    Real a_max = std::sqrt(tsum);  // Roe orientation-maximised fast speed
 
     //--- Step 3d. Roe-averaged non-ideal coefficients (face values)
     Real etaHroe = 0.5*(etaHl + etaHr);
@@ -244,10 +252,13 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
                 : 0.0;
     Real Eroe = etaHroe*etaHroe/(dxf*dxf);
     Real aTw = 0.5*(cTwl + cTwr);  // face curl (Stokes) is the mean of the L and R ones
-    Real aw = 0.5*(etaHroe/dxf + std::sqrt(etaHroe*etaHroe/(dxf*dxf) + 4.0*vaxsq));
+    // whistler uses the total Roe Alfven speed, vaxsq + ct2
+    Real aw = 0.5*(etaHroe/dxf + std::sqrt(etaHroe*etaHroe/(dxf*dxf)
+              + 4.0*(vaxsq + ct2)));
     Real ae = std::sqrt(a*a + Droe/4.0) + aTw;
-    Real af = std::sqrt(std::max(a,aw)*std::max(a,aw) + Droe/4.0
-                                                      + std::sqrt(Droe*Eroe)/2.0);
+    // field speed: orientation-maximised Psi when Hall or Peltier/Seebeck is on
+    Real psiroe = (etaHroe > 0.0 || dkJroe > 0.0) ? std::max(a_max,aw) : a;
+    Real af = std::sqrt(psiroe*psiroe + Droe/4.0 + std::sqrt(Droe*Eroe)/2.0);
 
     Real Groe = std::max<Real>(nw1roe*nw1roe, 4.0*nw2roe*nw2roe);
     Real denomroe = nw1roe*(nw1roe - 4.0*nw2roe);
@@ -263,9 +274,9 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
 
     // L/R dispersive waves
 
-    // Whistler wave (Field)
-    Real cwl = 0.5*(etaHl/dxl + std::sqrt(etaHl*etaHl/(dxl*dxl) + 4.0*cal*cal));
-    Real cwr = 0.5*(etaHr/dxr + std::sqrt(etaHr*etaHr/(dxr*dxr) + 4.0*car*car));
+    // Whistler wave (Field) total Alfven speed
+    Real cwl = 0.5*(etaHl/dxl + std::sqrt(etaHl*etaHl/(dxl*dxl) + 4.0*catl*catl));
+    Real cwr = 0.5*(etaHr/dxr + std::sqrt(etaHr*etaHr/(dxr*dxr) + 4.0*catr*catr));
 
     // Peltier Seebeck wave (Internal energy)
     Real Dl = 0;
@@ -278,12 +289,13 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     Real cter = std::sqrt(cr*cr + Dr/4.0);
 
     // Hall + Peltier/Seebeck wave (field)
+    // orientation-maximised Psi when Hall or Peltier/Seebeck is on
     Real El = etaHl*etaHl/(dxl*dxl);
     Real Er = etaHr*etaHr/(dxr*dxr);
-    Real ctewl = std::sqrt(std::max(cl,cwl)*std::max(cl,cwl)
-                         + Dl/4.0 + std::sqrt(Dl*El)/2.0);
-    Real ctewr = std::sqrt(std::max(cr,cwr)*std::max(cr,cwr)
-                        + Dr/4.0 + std::sqrt(Dr*Er)/2.0);
+    Real psil = (etaHl > 0.0 || dkappaJl > 0.0) ? std::max(cfml,cwl) : cl;
+    Real psir = (etaHr > 0.0 || dkappaJr > 0.0) ? std::max(cfmr,cwr) : cr;
+    Real ctewl = std::sqrt(psil*psil + Dl/4.0 + std::sqrt(Dl*El)/2.0);
+    Real ctewr = std::sqrt(psir*psir + Dr/4.0 + std::sqrt(Dr*Er)/2.0);
 
     // Gyro-viscous Wave (Velocity)
     Real Gl = std::max<Real>(nw1l*nw1l, 4.0*nw2l*nw2l);
