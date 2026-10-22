@@ -518,7 +518,7 @@ inline Real HydroDiffusion::ViscAnisoEigen(const Real u, const Real HII,
       + (4.0/3.0)*SQR(HII)*(nu_par*nu_p1*u*um + nu_par*nu_p2*SQR(u + 1.0)
                           + 3.0*nu_p1*nu_p2*SQR(um));
   Real disc = SQR(tr) - 4.0*det;
-  return 0.5*(tr + std::sqrt(disc));
+  return 0.5*(tr + std::sqrt(std::max(disc, 0.0)));
 }
 
 //----------------------------------------------------------------------------------------
