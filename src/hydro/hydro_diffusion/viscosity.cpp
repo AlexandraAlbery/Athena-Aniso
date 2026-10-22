@@ -1269,71 +1269,68 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
 
           // limited transverse derivatives (ZH1) for the dissipative stresses Pi0-Pi2;
           // metric terms are added after limiting
-          Real dvx_dx_t = dvx_dx;
-          dvx_dx_t = LimitedTransverse(
-          (p_i(IM1,k,j,i+1) - p_i(IM1,k,j,i))/pco_->dx1v(i),
-          (p_i(IM1,k,j,i) - p_i(IM1,k,j,i-1))/pco_->dx1v(i-1),
-          (p_i(IM1,k-1,j,i+1) - p_i(IM1,k-1,j,i))/pco_->dx1v(i),
-          (p_i(IM1,k-1,j,i) - p_i(IM1,k-1,j,i-1))/pco_->dx1v(i-1));
+          Real dvx_dx_t = dvx_dx; Real dvy_dx_t = dvy_dx; Real dvz_dx_t = dvz_dx;
+          Real dvx_dy_t = dvx_dy; Real dvy_dy_t = dvy_dy; Real dvz_dy_t = dvz_dy;
+          if(lim_v) {
+            dvx_dx_t = LimitedTransverse(
+            (p_i(IM1,k,j,i+1) - p_i(IM1,k,j,i))/pco_->dx1v(i),
+            (p_i(IM1,k,j,i) - p_i(IM1,k,j,i-1))/pco_->dx1v(i-1),
+            (p_i(IM1,k-1,j,i+1) - p_i(IM1,k-1,j,i))/pco_->dx1v(i),
+            (p_i(IM1,k-1,j,i) - p_i(IM1,k-1,j,i-1))/pco_->dx1v(i-1));
 
-          Real dvy_dx_t = dvy_dx;
-          dvy_dx_t = LimitedTransverse(
-          pco_->h2v(i)*(p_i(IM2,k,j,i+1)/pco_->h2v(i+1) - p_i(IM2,k,j,i)/pco_->h2v(i))
-          /pco_->dx1v(i),
-          pco_->h2v(i)*(p_i(IM2,k,j,i)/pco_->h2v(i) - p_i(IM2,k,j,i-1)/pco_->h2v(i-1))
-          /pco_->dx1v(i-1),
-          pco_->h2v(i)*(p_i(IM2,k-1,j,i+1)/pco_->h2v(i+1)
-          - p_i(IM2,k-1,j,i)/pco_->h2v(i))
-          /pco_->dx1v(i),
-          pco_->h2v(i)*(p_i(IM2,k-1,j,i)/pco_->h2v(i)
-          - p_i(IM2,k-1,j,i-1)/pco_->h2v(i-1))
-          /pco_->dx1v(i-1));
+            dvy_dx_t = LimitedTransverse(
+            pco_->h2v(i)*(p_i(IM2,k,j,i+1)/pco_->h2v(i+1) - p_i(IM2,k,j,i)/pco_->h2v(i))
+            /pco_->dx1v(i),
+            pco_->h2v(i)*(p_i(IM2,k,j,i)/pco_->h2v(i) - p_i(IM2,k,j,i-1)/pco_->h2v(i-1))
+            /pco_->dx1v(i-1),
+            pco_->h2v(i)*(p_i(IM2,k-1,j,i+1)/pco_->h2v(i+1)
+            - p_i(IM2,k-1,j,i)/pco_->h2v(i))
+            /pco_->dx1v(i),
+            pco_->h2v(i)*(p_i(IM2,k-1,j,i)/pco_->h2v(i)
+            - p_i(IM2,k-1,j,i-1)/pco_->h2v(i-1))
+            /pco_->dx1v(i-1));
 
-          Real dvz_dx_t = dvz_dx;
-          dvz_dx_t = LimitedTransverse(
-          pco_->h31v(i)*(p_i(IM3,k,j,i+1)/pco_->h31v(i+1)
-          - p_i(IM3,k,j,i)/pco_->h31v(i))
-          /pco_->dx1v(i),
-          pco_->h31v(i)*(p_i(IM3,k,j,i)/pco_->h31v(i)
-          - p_i(IM3,k,j,i-1)/pco_->h31v(i-1))
-          /pco_->dx1v(i-1),
-          pco_->h31v(i)*(p_i(IM3,k-1,j,i+1)/pco_->h31v(i+1)
-          - p_i(IM3,k-1,j,i)/pco_->h31v(i))
-          /pco_->dx1v(i),
-          pco_->h31v(i)*(p_i(IM3,k-1,j,i)/pco_->h31v(i)
-          - p_i(IM3,k-1,j,i-1)/pco_->h31v(i-1))
-          /pco_->dx1v(i-1));
+            dvz_dx_t = LimitedTransverse(
+            pco_->h31v(i)*(p_i(IM3,k,j,i+1)/pco_->h31v(i+1)
+            - p_i(IM3,k,j,i)/pco_->h31v(i))
+            /pco_->dx1v(i),
+            pco_->h31v(i)*(p_i(IM3,k,j,i)/pco_->h31v(i)
+            - p_i(IM3,k,j,i-1)/pco_->h31v(i-1))
+            /pco_->dx1v(i-1),
+            pco_->h31v(i)*(p_i(IM3,k-1,j,i+1)/pco_->h31v(i+1)
+            - p_i(IM3,k-1,j,i)/pco_->h31v(i))
+            /pco_->dx1v(i),
+            pco_->h31v(i)*(p_i(IM3,k-1,j,i)/pco_->h31v(i)
+            - p_i(IM3,k-1,j,i-1)/pco_->h31v(i-1))
+            /pco_->dx1v(i-1));
 
-          Real dvx_dy_t = dvx_dy;
-          dvx_dy_t = LimitedTransverse(
-          (p_i(IM1,k,j+1,i) - p_i(IM1,k,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
-          (p_i(IM1,k,j,i) - p_i(IM1,k,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1)),
-          (p_i(IM1,k-1,j+1,i) - p_i(IM1,k-1,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
-          (p_i(IM1,k-1,j,i) - p_i(IM1,k-1,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1)));
+            dvx_dy_t = LimitedTransverse(
+            (p_i(IM1,k,j+1,i) - p_i(IM1,k,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
+            (p_i(IM1,k,j,i) - p_i(IM1,k,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1)),
+            (p_i(IM1,k-1,j+1,i) - p_i(IM1,k-1,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
+            (p_i(IM1,k-1,j,i) - p_i(IM1,k-1,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1)));
 
-          Real dvy_dy_t = dvy_dy;
-          dvy_dy_t = (LimitedTransverse(
-          (p_i(IM2,k,j+1,i) - p_i(IM2,k,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
-          (p_i(IM2,k,j,i) - p_i(IM2,k,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1)),
-          (p_i(IM2,k-1,j+1,i) - p_i(IM2,k-1,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
-          (p_i(IM2,k-1,j,i) - p_i(IM2,k-1,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1))))
-          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k-1,j,i)) * pco_->dh2vd1(i) / pco_->h2v(i);
+            dvy_dy_t = (LimitedTransverse(
+            (p_i(IM2,k,j+1,i) - p_i(IM2,k,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
+            (p_i(IM2,k,j,i) - p_i(IM2,k,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1)),
+            (p_i(IM2,k-1,j+1,i) - p_i(IM2,k-1,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
+            (p_i(IM2,k-1,j,i) - p_i(IM2,k-1,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1))))
+            + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k-1,j,i)) * pco_->dh2vd1(i) / pco_->h2v(i);
 
-          Real dvz_dy_t = dvz_dy;
-          dvz_dy_t = LimitedTransverse(
-          pco_->h32v(j)*(p_i(IM3,k,j+1,i)/pco_->h32v(j+1)
-          - p_i(IM3,k,j,i)/pco_->h32v(j))
-          /(pco_->h2v(i)*pco_->dx2v(j)),
-          pco_->h32v(j)*(p_i(IM3,k,j,i)/pco_->h32v(j)
-          - p_i(IM3,k,j-1,i)/pco_->h32v(j-1))
-          /(pco_->h2v(i)*pco_->dx2v(j-1)),
-          pco_->h32v(j)*(p_i(IM3,k-1,j+1,i)/pco_->h32v(j+1)
-          - p_i(IM3,k-1,j,i)/pco_->h32v(j))
-          /(pco_->h2v(i)*pco_->dx2v(j)),
-          pco_->h32v(j)*(p_i(IM3,k-1,j,i)/pco_->h32v(j)
-          - p_i(IM3,k-1,j-1,i)/pco_->h32v(j-1))
-          /(pco_->h2v(i)*pco_->dx2v(j-1)));
-
+            dvz_dy_t = LimitedTransverse(
+            pco_->h32v(j)*(p_i(IM3,k,j+1,i)/pco_->h32v(j+1)
+            - p_i(IM3,k,j,i)/pco_->h32v(j))
+            /(pco_->h2v(i)*pco_->dx2v(j)),
+            pco_->h32v(j)*(p_i(IM3,k,j,i)/pco_->h32v(j)
+            - p_i(IM3,k,j-1,i)/pco_->h32v(j-1))
+            /(pco_->h2v(i)*pco_->dx2v(j-1)),
+            pco_->h32v(j)*(p_i(IM3,k-1,j+1,i)/pco_->h32v(j+1)
+            - p_i(IM3,k-1,j,i)/pco_->h32v(j))
+            /(pco_->h2v(i)*pco_->dx2v(j)),
+            pco_->h32v(j)*(p_i(IM3,k-1,j,i)/pco_->h32v(j)
+            - p_i(IM3,k-1,j-1,i)/pco_->h32v(j-1))
+            /(pco_->h2v(i)*pco_->dx2v(j-1)));
+          }
           Real divv_t = dvx_dx_t + dvy_dy_t + dvz_dz;
           Real Wxx_t = 2.0*(dvx_dx_t - divv_t/3.0);
           Real Wyy_t = 2.0*(dvy_dy_t - divv_t/3.0);
