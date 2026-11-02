@@ -8,7 +8,7 @@ Athena-Aniso extends the Athena++ MHD code with collisional Braginskii transport
 <!-- Once a release is archived on Zenodo:
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX) -->
 
-This is the code for [Author] (in prep.), *[Paper title]*. It is built on Athena++ (upstream commit `<hash>`); for everything inherited from Athena++ (AMR, coordinate systems, the ideal MHD solvers, I/O) see the [Athena++ documentation](https://github.com/PrincetonUniversity/athena/wiki).
+This is the code for Albery A.F and Pittard J.M., `von Neumann Stability Analysis of Braginskii MHD: Thermal Conduction, Viscosity, Magnetic Diffusion, and Thermoelectric Effects; and an Implementation in Athena++`, In Prep. It is built on Athena++ (upstream commit `823614c90b594472747a0ac2a699e4a454f300d2`); for everything inherited from Athena++ (AMR, coordinate systems, the ideal MHD solvers, I/O) see the [Athena++ documentation](https://github.com/PrincetonUniversity/athena/wiki).
 
 ## What Athena-Aniso adds
 
