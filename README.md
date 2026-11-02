@@ -16,13 +16,13 @@ This is the code for Albery A.F and Pittard J.M., `von Neumann Stability Analysi
 
 | Process | Components | Effects |
 |---|---|---|
-| Thermal conduction | parallel, perpendicular, cross | anisotropic conduction, Righi–Leduc |
+| Thermal conduction | parallel, perpendicular, wedge | anisotropic conduction, Righi–Leduc |
 | Shear viscosity | five Braginskii terms | parallel, perpendicular and gyroviscous stress |
 | Bulk viscosity | isotropic | molecular gas |
-| Thermoelectric heat flux | parallel, perpendicular, cross | Peltier, Ettingshausen |
-| Thermoelectric force (EMF) | parallel, perpendicular, cross | Seebeck, Nernst |
+| Thermoelectric heat flux | parallel, perpendicular, wedge | Peltier, Ettingshausen |
+| Thermoelectric force (EMF) | parallel, perpendicular, wedge | Seebeck, Nernst |
 | Hall effect | $\eta_{\text{H}}\vec{J}\times\hat{b}$ EMF | whistler waves |
-| Partial ionisation | conduction, viscosity | isotropic neutrals, anisotropic ions |
+| Partial ionisation | conduction, viscosity, thermoelectric | isotropic neutrals, anisotropic ions/electrons |
 
 **Numerics.**
 
@@ -51,28 +51,32 @@ Switch transport terms on in the `<problem>` block of the input file:
 
 ```
 <problem>
-kappa_iso                = 1.0   # Isotropic Thermal Conduction (Stock Athena++)
-nu_iso                   = 1.0   # Isotropic Viscoisty (Stock Athena++)
-eta_ohm                  = 1.0   # Ohmic Resistivity (Stock Athena++)
-eta_ad                   = 1.0   # Ambipolar Diffusion (Stock Athena++)
-kappa_aniso_neutral      = 1.0   # Neutral Thermal Conduction
-kappa_aniso_para         = 1.0   # Parallel Thermal Conduction
-kappa_aniso_perp         = 1.0   # Perpendicular Thermal Conduction
-kappa_aniso_wedge        = 1.0   # Wedge Thermal Conduction (Righi-Leduc Effect)
-nu_aniso_neutral         = 1.0   # Neutral viscosity
-nu_aniso_para            = 1.0   # Parallel (Pi0) Viscosity
-nu_aniso_perp1           = 1.0   # Perpendicular (Pi1) Viscosity
-nu_aniso_perp2           = 1.0   # Perpendicular (Pi2) Viscosity
-nu_aniso_wedge1          = 1.0   # Wedge (Pi3) Gyro-Viscosity
-nu_aniso_wedge2          = 1.0   # Wedge (Pi4) Gyro-Viscosity
-zeta_bulk                = 1.0   # Bulk Viscosity
-eta_hall                 = 1.0   # Hall Effect
-kappa_aniso_TE_para      = 1.0   # Parallel Thermoelectric Effects (Peltier + Seebeck Effects)
-kappa_aniso_TE_perp      = 1.0   # Perpendicular Thermoelectric Effects (Peltier + Seebeck Effects)
-kappa_aniso_TE_wedge     = 1.0   # Wedge Thermoelectric Effects (Nernst + Ettingshausen Effects)
-ion_frac_const           = 1.0   # Constant Ionisation Fraction
-debug_therm_conduct_only = false # Only Thermoelectric Conduction (Peltier + Ettingshausen Effects) debug only!
-debug_therm_force_only   = false # Only Thermoelectric Force (Seebeck + Nernst Effects) debug only!
+kappa_iso                  = 1.0   # Isotropic Thermal Conduction (Stock Athena++)
+nu_iso                     = 1.0   # Isotropic Viscoisty (Stock Athena++)
+eta_ohm                    = 1.0   # Ohmic Resistivity (Stock Athena++)
+eta_ad                     = 1.0   # Ambipolar Diffusion (Stock Athena++)
+kappa_aniso_neutral        = 1.0   # Neutral Thermal Conduction
+kappa_aniso_para           = 1.0   # Parallel Thermal Conduction
+kappa_aniso_perp           = 1.0   # Perpendicular Thermal Conduction
+kappa_aniso_wedge          = 1.0   # Wedge Thermal Conduction (Righi-Leduc Effect)
+nu_aniso_neutral           = 1.0   # Neutral viscosity
+nu_aniso_para              = 1.0   # Parallel (Pi0) Viscosity
+nu_aniso_perp1             = 1.0   # Perpendicular (Pi1) Viscosity
+nu_aniso_perp2             = 1.0   # Perpendicular (Pi2) Viscosity
+nu_aniso_wedge1            = 1.0   # Wedge (Pi3) Gyro-Viscosity
+nu_aniso_wedge2            = 1.0   # Wedge (Pi4) Gyro-Viscosity
+zeta_bulk                  = 1.0   # Bulk Viscosity
+eta_hall                   = 1.0   # Hall Effect
+kappa_aniso_TE_para        = 1.0   # Parallel Thermoelectric Effects (Peltier + Seebeck Effects)
+kappa_aniso_TE_perp        = 1.0   # Perpendicular Thermoelectric Effects (Peltier + Seebeck Effects)
+kappa_aniso_TE_wedge       = 1.0   # Wedge Thermoelectric Effects (Nernst + Ettingshausen Effects)
+ion_frac_const             = 1.0   # Constant Ionisation Fraction
+debug_therm_conduct_only   = false # Only Thermoelectric Conduction (Peltier + Ettingshausen Effects) debug only!
+debug_therm_force_only     = false # Only Thermoelectric Force (Seebeck + Nernst Effects) debug only!
+limit_saturated_conduction = 1     # saturated conduction (recomended on)
+flux_limit_conduction      = 1     # conduction flux limite (recomended on)r
+limit_pressure_anisotropy  =  1    # viscosity saturation (recomended on)
+flux_limit_viscosity       =  1    # viscosity flux limiter (recomended on)
 ```
 
 Coefficients that vary in space or time are set cell by cell in the functions enrolled with `EnrollConductionCoefficient` for thermal conduction, `EnrollViscosityCoefficient` for viscoisty, and `EnrollFieldDiffusivity` for the Hall and thermoelectric effects. See [diffusion.md](diffusion.md).

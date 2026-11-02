@@ -36,7 +36,7 @@ Cross products with a tensor act on the adjacent index:
 The conductive heat flux combines an isotropic neutral flux with an anisotropic ionised flux:
 
 ```math
-\vec{q}_{\text{aniso}} = (1-\text{HII}_{\text{frac}})\vec{q}_{\text{neu}} + \text{HII}_{\text{frac}}\vec{q}_{\text{ion}} .
+\vec{q}_{\text{aniso}} = (1-\text{HII}_{\text{frac}})\vec{q}_{\text{neu}} + \text{HII}_{\text{frac}}\vec{q}_{e} .
 ```
 
 The neutral flux is isotropic,
@@ -49,7 +49,7 @@ and the ionised flux has parallel, perpendicular and wedge components:
 
 ```math
 \begin{aligned}
-\vec{q}_{\text{ion}} &= \vec{q}_{\parallel} + \vec{q}_{\perp} + \vec{q}_{\wedge},\\
+\vec{q}_{e} &= \vec{q}_{\parallel} + \vec{q}_{\perp} + \vec{q}_{\wedge},\\
 \vec{q}_{\parallel} &= -\rho\kappa_{\parallel}(\hat{b}\cdot\nabla[T])\hat{b},\\
 \vec{q}_{\perp} &= -\rho\kappa_{\perp}\left(\nabla[T] - (\hat{b}\cdot\nabla[T])\hat{b}\right),\\
 \vec{q}_{\wedge} &= -\rho\kappa_{\wedge}\hat{b}\times\nabla[T].
@@ -186,7 +186,7 @@ If the neutral coefficient is zero or not set in the input file, the gas is trea
 | $\kappa_{\text{neu}}$, $\kappa_{\parallel}$, $\kappa_{\perp}$, $\kappa_{\wedge}$ | `kappa_aniso_*` | $L^{2} T^{-1}$ (thermal diffusivity) |
 | $\nu_{\text{neu}}$, $\nu_{\parallel}$, $\nu_{\perp}$, $\nu_{\wedge}$ | `nu_aniso_*` | $L^{2} T^{-1}$ (kinematic viscosity) |
 | $\kappa_{J,\parallel}$, $\kappa_{J,\perp}$, $\kappa_{J,\wedge}$ | `kappa_therm_*` | $L^{3/2} M^{1/2} T^{-2}$ (electrical current) |
-| $\zeta$ | `zeta_bulk` | see [Bulk viscosity](#bulk-viscosity) |
+| $\zeta$ | `zeta_bulk` | $M L^{-1} T^{-1}$ (dynamic viscosity) |
 
 L, T and M denote length, time and mass.
 
