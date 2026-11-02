@@ -5,8 +5,7 @@
 Athena-Aniso extends the Athena++ MHD code with collisional Braginskii transport (anisotropic thermal conduction, anisotropic and gyro-viscosity, the Hall effect and thermoelectric effects) plus bulk viscosity, together with the time-step limits, super-time-stepping split and Riemann-solver signal speeds needed to run them stably. In partially ionised gas, neutrals diffuse isotropically and ions anisotropically, weighted by the local ionisation fraction.
 
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
-<!-- Once a release is archived on Zenodo:
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX) -->
+Current Release: [![DOI](https://zenodo.org/badge/1352547810.svg)](https://doi.org/10.5281/zenodo.23887592)
 
 This is the code for Albery A.F and Pittard J.M., `von Neumann Stability Analysis of Braginskii MHD: Thermal Conduction, Viscosity, Magnetic Diffusion, and Thermoelectric Effects; and an Implementation in Athena++`, In Prep. It is built on Athena++ (upstream commit `823614c90b594472747a0ac2a699e4a454f300d2`); for everything inherited from Athena++ (AMR, coordinate systems, the ideal MHD solvers, I/O) see the [Athena++ documentation](https://github.com/PrincetonUniversity/athena/wiki).
 
