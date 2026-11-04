@@ -7,7 +7,7 @@ Athena-Aniso extends the Athena++ MHD code with collisional Braginskii transport
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 Current Release: [![DOI](https://zenodo.org/badge/1352547810.svg)](https://doi.org/10.5281/zenodo.23887592)
 
-This is the code for Albery A.F and Pittard J.M., `von Neumann Stability Analysis of Braginskii MHD: Thermal Conduction, Viscosity, Magnetic Diffusion, and Thermoelectric Effects; and an Implementation in Athena++`, In Prep. It is built on Athena++ (upstream commit `823614c90b594472747a0ac2a699e4a454f300d2`); for everything inherited from Athena++ (AMR, coordinate systems, the ideal MHD solvers, I/O) see the [Athena++ documentation](https://github.com/PrincetonUniversity/athena/wiki).
+The method paper for this code is Albery A.F and Pittard J.M., `von Neumann Stability Analysis of Braginskii MHD: Thermal Conduction, Viscosity, Magnetic Diffusion, and Thermoelectric Effects; and an Implementation in Athena++`, Pre-print, https://arxiv.org/abs/2611.05086. It is built on Athena++ (upstream commit `823614c90b594472747a0ac2a699e4a454f300d2`); for everything inherited from Athena++ (AMR, coordinate systems, the ideal MHD solvers, I/O) see the [Athena++ documentation](https://github.com/PrincetonUniversity/athena/wiki).
 
 ## What Athena-Aniso adds
 
@@ -73,9 +73,9 @@ ion_frac_const             = 1.0   # Constant Ionisation Fraction
 debug_therm_conduct_only   = false # Only Thermoelectric Conduction (Peltier + Ettingshausen Effects) debug only!
 debug_therm_force_only     = false # Only Thermoelectric Force (Seebeck + Nernst Effects) debug only!
 limit_saturated_conduction = 1     # saturated conduction (recomended on)
-flux_limit_conduction      = 1     # conduction flux limite (recomended on)r
-limit_pressure_anisotropy  =  1    # viscosity saturation (recomended on)
-flux_limit_viscosity       =  1    # viscosity flux limiter (recomended on)
+flux_limit_conduction      = 1     # conduction flux limite (recomended on)
+limit_pressure_anisotropy  = 1     # viscosity saturation (recomended on)
+flux_limit_viscosity       = 1     # viscosity flux limiter (recomended on)
 ```
 
 Coefficients that vary in space or time are set cell by cell in the functions enrolled with `EnrollConductionCoefficient` for thermal conduction, `EnrollViscosityCoefficient` for viscoisty, and `EnrollFieldDiffusivity` for the Hall and thermoelectric effects. See [diffusion.md](diffusion.md).
@@ -95,11 +95,14 @@ The test problems from the paper run in 3D Cartesian geometry with a single mode
 If you use Athena-Aniso, please cite the method paper and Athena++:
 
 ```bibtex
-@unpublished{AthenaAniso,
-  author = {Alexandra F. Albery and Julian M. Pittard},
-  title  = {Von Neumann Stability Analysis of Braginskii MHD: Thermal Conduction, Viscosity, Magnetic Diffusion, and Thermoelectric Effects - An Implementation in Athena++},
-  year   = {2026},
-  note   = {in prep.}
+@misc{albery2026vonneumannstabilityanalysis,
+      title={von Neumann Stability Analysis of Braginskii MHD Thermal Conduction, Viscosity, Magnetic Diffusion, and Thermoelectric Effects and an Implementation in Athena++}, 
+      author={Alexandra F. Albery and Julian M. Pittard},
+      year={2026},
+      eprint={2611.05086},
+      archivePrefix={arXiv},
+      primaryClass={astro-ph.IM},
+      url={https://arxiv.org/abs/2611.05086}, 
 }
 
 @article{Stone2020,

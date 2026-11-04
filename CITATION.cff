@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use Athena-Aniso, please cite the article in preferred-citation, and Athena++ (Stone et al. 2020) from references."
 title: "Athena-Aniso"
-abstract: "Fork of Athena++ with full Braginskii transport."
+abstract: "Fork of Athena++ with Braginskii transport."
 authors:
   - family-names: "Albery"
     given-names: "Alexandra"
@@ -12,6 +12,7 @@ authors:
     affiliation: "University of Leeds"
     orcid: "https://orcid.org/0000-0003-2244-5070"
 repository-code: "https://github.com/AlexandraAlbery/Athena-Aniso"
+doi: 10.5281/zenodo.23887592
 license: BSD-3-Clause
 references:
   - type: software
@@ -21,7 +22,7 @@ references:
     repository-code: "https://github.com/PrincetonUniversity/athena"
     doi: 10.5281/zenodo.4455880
     version: "21.0"
-    commit: "<output of: git merge-base aniso main>"
+    commit: "823614c90b594472747a0ac2a699e4a454f300d2"
   - type: article
     title: "Athena++ Adaptive Mesh Refinement Framework: Design and Magnetohydrodynamic Solvers"
     journal: "The Astrophysical Journal Supplement Series"
@@ -48,11 +49,13 @@ preferred-citation:
   title: "von Neumann Stability Analysis of Braginskii MHD: Thermal Conduction, Viscosity, Magnetic Diffusion, and Thermoelectric Effects; and an Implementation in Athena++"
   authors:
     - family-names: "Albery"
-      given-names: "Alexandra"
+      given-names: "Alexandra F."
       affiliation: "University of Leeds"
       orcid: "https://orcid.org/0000-0003-0076-4273"
     - family-names: "Pittard"
-      given-names: "Julian"
+      given-names: "Julian M."
       affiliation: "University of Leeds"
       orcid: "https://orcid.org/0000-0003-2244-5070"
+  doi: 10.48550/arXiv.2611.05086
+  url: "https://arxiv.org/abs/2611.05086"
   year: 2026
