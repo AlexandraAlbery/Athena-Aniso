@@ -1798,7 +1798,8 @@ void HydroDiffusion::FaceZdx(const int k, const int j, const int il, const int i
   if (pmb_->pmy_mesh->f3) {
 #pragma omp simd
     for (int i=il; i<=iu; ++i) {
-      len(i) = (prim(IM1,k,j,i) - prim(IM1,k-1,j,i))/pco_->dx3v(k-1)
+      len(i) = (prim(IM1,k,j,i) - prim(IM1,k-1,j,i))
+               / pco_->h31v(i) / pco_->h32v(j) / pco_->dx3v(k-1)
                + 0.5*pco_->h31v(i)*(
                    (prim(IM3,k,j,i+1) + prim(IM3,k-1,j,i+1))/pco_->h31v(i+1)
                    -(prim(IM3,k,j,i-1) + prim(IM3,k-1,j,i-1))/pco_->h31v(i-1)

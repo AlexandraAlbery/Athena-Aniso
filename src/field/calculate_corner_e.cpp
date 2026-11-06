@@ -45,8 +45,8 @@ void Field::ComputeCornerE(AthenaArray<Real> &w, AthenaArray<Real> &bcc) {
     if (fdif.field_diffusion_defined) { // Add diffusion EMF
       if (!STS_ENABLED) fdif.AddEMF(fdif.e_oa, e); // ohmic + ambi + FT_wedge
       fdif.AddEMF(fdif.e_h, e); // Hall + FT_Para + FT_Perp
-    return;
     }
+    return;
   }
 
   if (pmb->block_size.nx3 == 1) {

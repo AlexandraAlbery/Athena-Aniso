@@ -507,7 +507,7 @@ void Coordinates::AddCoordTermsDivergence(const Real dt, const AthenaArray<Real>
                             (hd.nu_iso > 0.0 || hd.nu_aniso_neutral > 0.0 ||
                              hd.nu_aniso_para > 0.0 || hd.nu_aniso_perp1 > 0.0 ||
                              hd.nu_aniso_perp2 > 0.0 || hd.nu_aniso_wedge1 > 0.0 ||
-                             hd.nu_aniso_wedge2 > 0.0));
+                             hd.nu_aniso_wedge2 > 0.0 || hd.zeta_bulk > 0.0));
 
   // Go through cells
   for (int k=pmy_block->ks; k<=pmy_block->ke; ++k) {
@@ -606,7 +606,7 @@ void Coordinates::AddCoordTermsDivergence_STS(const Real dt, int stage,
                             (hd.nu_iso > 0.0 || hd.nu_aniso_neutral > 0.0 ||
                              hd.nu_aniso_para > 0.0 || hd.nu_aniso_perp1 > 0.0 ||
                              hd.nu_aniso_perp2 > 0.0 || hd.nu_aniso_wedge1 > 0.0 ||
-                             hd.nu_aniso_wedge2 > 0.0));
+                             hd.nu_aniso_wedge2 > 0.0 || hd.zeta_bulk > 0.0));
 
   // Go through cells
   if (do_hydro_diffusion) {

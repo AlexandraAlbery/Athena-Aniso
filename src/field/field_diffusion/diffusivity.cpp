@@ -497,7 +497,6 @@ void FieldDiffusion::AmbipolarEMF(const FaceField &b, const AthenaArray<Real> &b
         JdotB = intJx*intBx + intJy*intBy + intJz*intBz;
 
         e3(ks,  j,i) += eta_A * (J3(ks,j,i) - JdotB*intBz/Bsq);
-        e3(ke+1,j,i)  = e3(ks,j,i);
       }
     }
     return;
@@ -693,7 +692,6 @@ void FieldDiffusion::HallEMF(const FaceField &b, const AthenaArray<Real> &bc,
         Real bcJz = bx*Jy - by*Jx;
 
         e3(ks,  j,i) -= eta_H * bcJz;
-        e3(ke+1,j,i)  = e3(ks,j,i);
       }
     }
     return;
@@ -899,8 +897,9 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
   } // k loop
 
   // y face thermoelectric conduction
+  const int jfe = (pmb->block_size.nx2 > 1) ? je+1 : js-1;
   for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je+1; ++j) {
+    for (int j=js; j<=jfe; ++j) {
 #pragma omp simd
       for (int i=is; i<=ie; ++i) {
         therm_para = therm_perp = therm_wedge = 0.0;
@@ -964,6 +963,7 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
     } // j loop
   } // k loop
 
+  if (pmb->block_size.nx3 > 1) {
     // z face thermoelectric conduction
     for (int k=ks; k<=ke+1; ++k) {
       for (int j=js; j<=je; ++j) {
@@ -1028,6 +1028,7 @@ void FieldDiffusion::ThermoElectricConduction(MeshBlock *pmb, const FaceField &b
         } // i loop
       } // j loop
     } // k loop
+  }
   return;
 }
 
@@ -1351,9 +1352,7 @@ void FieldDiffusion::ThermoElectricForce(MeshBlock *pmb, const FaceField &b,
         }
 
         e3_diff(ks,  j,i) += FTz_wedge;
-        e3_diff(ke+1,j,i)  = e3_diff(ks,j,i);
         e3_disp(ks,  j,i) += FTz_para + FTz_perp;
-        e3_disp(ke+1,j,i)  = e3_disp(ks,j,i);
       } // i loop
     } // j loop
   } else {  // 3D update
