@@ -396,37 +396,35 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
   // Calculate the flux across each face.
   // i-direction
   jl = js, ju = je, kl = ks, ku = ke;
-    if (MAGNETIC_FIELDS_ENABLED) {
-      if (f2) {
-        if (!f3) // 2D MHD limits
-          jl = js-1, ju = je+1, kl = ks, ku = ke;
-        else // 3D MHD limits
-            jl = js-1, ju = je+1, kl = ks-1, ku = ke+1;
-      }
+  if (MAGNETIC_FIELDS_ENABLED) {
+    if (f2) {
+      if (!f3) // 2D MHD limits
+        jl = js-1, ju = je+1, kl = ks, ku = ke;
+      else // 3D MHD limits
+        jl = js-1, ju = je+1, kl = ks-1, ku = ke+1;
     }
+  }
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
 #pragma omp simd
       for (int i=is; i<=ie+1; ++i) {
-        Real nu_iso = 0.0, nu_para = 0.0, nu_perp = 0.0, nu_wedge = 0.0;
+        Real nu_iso = 0.0; Real nu_para = 0.0; Real nu_perp = 0.0; Real nu_wedge = 0.0;
         Real rho_face = 0.0;
-        Real B = 0.0, Bx = 0.0, By = 0.0, Bz = 0.0;
-        Real bx = 0.0, by = 0.0, bz = 0.0;
-        Real bxx = 0.0, bxy = 0.0, bxz = 0.0, byy = 0.0, byz = 0.0, bzz = 0.0;
-        Real Ixx = 0.0, Ixy = 0.0, Ixz = 0.0, Iyy = 0.0, Iyz = 0.0, Izz = 0.0;
-        Real WIxx = 0.0, WIxy = 0.0, WIxz = 0.0,
-        WIyx = 0.0, WIyy = 0.0, WIyz = 0.0,
-        WIzx = 0.0, WIzy = 0.0, WIzz = 0.0;
-        Real Wbxx = 0.0, Wbxy = 0.0, Wbxz = 0.0,
-        Wbyx = 0.0, Wbyy = 0.0, Wbyz = 0.0,
-        Wbzx = 0.0, Wbzy = 0.0, Wbzz = 0.0;
+        Real B = 0.0; Real Bx = 0.0; Real By = 0.0; Real Bz = 0.0;
+        Real bx = 0.0; Real by = 0.0; Real bz = 0.0;
+        Real bxx = 0.0; Real bxy = 0.0; Real bxz = 0.0;
+        Real byy = 0.0; Real byz = 0.0; Real bzz = 0.0;
+        Real Ixx = 0.0; Real Ixy = 0.0; Real Ixz = 0.0;
+        Real Iyy = 0.0; Real Iyz = 0.0; Real Izz = 0.0;
+        Real WIxx = 0.0; Real WIxy = 0.0; Real WIxz = 0.0;
+        Real WIyx = 0.0; Real WIyy = 0.0; Real WIyz = 0.0;
+        Real WIzx = 0.0; Real WIzy = 0.0; Real WIzz = 0.0;
+        Real Wbxx = 0.0; Real Wbxy = 0.0; Real Wbxz = 0.0;
+        Real Wbyx = 0.0; Real Wbyy = 0.0; Real Wbyz = 0.0;
+        Real Wbzx = 0.0; Real Wbzy = 0.0; Real Wbzz = 0.0;
         Real bWb = 0.0;
-        Real Pi_xx = 0.0, Pi_xy = 0.0, Pi_xz = 0.0,
-        Pi_yx = 0.0, Pi_yy = 0.0, Pi_yz = 0.0,
-        Pi_zx = 0.0, Pi_zy = 0.0, Pi_zz = 0.0;
-        Real Pi_xx_disp = 0.0, Pi_xy_disp = 0.0, Pi_xz_disp = 0.0,
-        Pi_yx_disp = 0.0, Pi_yy_disp = 0.0, Pi_yz_disp = 0.0,
-        Pi_zx_disp = 0.0, Pi_zy_disp = 0.0, Pi_zz_disp = 0.0;
+        Real Pi_xx = 0.0; Real Pi_xy = 0.0; Real Pi_xz = 0.0;
+        Real Pi_xx_disp = 0.0; Real Pi_xy_disp = 0.0; Real Pi_xz_disp = 0.0;
 
         rho_face = 0.5*(p_i(IDN,k,j,i) + p_i(IDN,k,j,i-1));
 
@@ -475,7 +473,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
         / (pco_->h31f(i) * pco_->h32v(j))
         / (pco_->dx3v(k-1) + pco_->dx3v(k)))
         + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j,i-1))
-        * pco_->dh31fd1(i) / pco_->h31f(i)
+        * pco_->dh31fd1(i) / (pco_->h31f(i) != 0.0 ? pco_->h31f(i) : 1.0)  // R=0 face
         + 0.5*(p_i(IM2,k,j,i) + p_i(IM2,k,j,i-1))
         * pco_->dh32vd2(j) / (pco_->h32v(j) * pco_->h2f(i));
 
@@ -551,7 +549,8 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
           /(pco_->h31f(i)*pco_->h32v(j)*pco_->dx3v(k)),
           (p_i(IM3,k,j,i-1) - p_i(IM3,k-1,j,i-1))
           /(pco_->h31f(i)*pco_->h32v(j)*pco_->dx3v(k-1))))
-          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j,i-1)) * pco_->dh31fd1(i) / pco_->h31f(i)
+          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j,i-1)) * pco_->dh31fd1(i)
+          / (pco_->h31f(i) != 0.0 ? pco_->h31f(i) : 1.0)  // R=0 face
           + 0.5*(p_i(IM2,k,j,i) + p_i(IM2,k,j,i-1))
           * pco_->dh32vd2(j) / (pco_->h32v(j) * pco_->h2f(i));
         }
@@ -643,7 +642,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
         }
         if (use_para) { // parallel viscosity (Pi0) RF1 eqn (4.129)
           nu_para = 0.5*(nu(DiffProcess::nu_para,k,j,i)
-                       + nu(DiffProcess::nu_para,k,j,i-1));
+          + nu(DiffProcess::nu_para,k,j,i-1));
           Real dp = 1.5 * HII * rho_face * nu_para * bWb;  // p_perp - p_para
           if (lim_p) {
             dp = std::min(std::max(dp, -B*B), 0.5*B*B); // firehose, mirror
@@ -759,17 +758,17 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
         if (NON_BAROTROPIC_EOS) {
           if(use_neutral || use_para || use_perp1 || use_perp2) {
             x1flux(IEN,k,j,i) += 0.5*((p(IM1,k,j,i-1) + p(IM1,k,j,i))*Pi_xx
-                                    +(p(IM2,k,j,i-1) + p(IM2,k,j,i))*Pi_xy
-                                    +(p(IM3,k,j,i-1) + p(IM3,k,j,i))*Pi_xz);
+            +(p(IM2,k,j,i-1) + p(IM2,k,j,i))*Pi_xy
+            +(p(IM3,k,j,i-1) + p(IM3,k,j,i))*Pi_xz);
           }
           if (use_wedge1 || use_wedge2) {
             x1flux_disp(IEN,k,j,i) += 0.5*((p(IM1,k,j,i-1) + p(IM1,k,j,i))*Pi_xx_disp
-                                        +(p(IM2,k,j,i-1) + p(IM2,k,j,i))*Pi_xy_disp
-                                        +(p(IM3,k,j,i-1) + p(IM3,k,j,i))*Pi_xz_disp);
+                +(p(IM2,k,j,i-1) + p(IM2,k,j,i))*Pi_xy_disp
+                +(p(IM3,k,j,i-1) + p(IM3,k,j,i))*Pi_xz_disp);
             if(!STS_ENABLED) {
               x1flux(IEN,k,j,i) += 0.5*((p(IM1,k,j,i-1) + p(IM1,k,j,i))*Pi_xx_disp
-                                      +(p(IM2,k,j,i-1) + p(IM2,k,j,i))*Pi_xy_disp
-                                      +(p(IM3,k,j,i-1) + p(IM3,k,j,i))*Pi_xz_disp);
+                +(p(IM2,k,j,i-1) + p(IM2,k,j,i))*Pi_xy_disp
+                +(p(IM3,k,j,i-1) + p(IM3,k,j,i))*Pi_xz_disp);
             } // end if STS
           } // end if wedge
         } // end if NON_BAROTROPIC_EOS
@@ -785,85 +784,86 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
     else // 3D MHD limits
       il = is-1, iu = ie+1, kl = ks-1, ku = ke+1;
   }
-  if (f2) { // j direction
+  // j direction. 1D curvilinear runs still get the hoop stress Pi_22.
+  const int dj = f2 ? 1 : 0;
+  { // j direction
     for (int k=kl; k<=ku; ++k) {
-      for (int j=js; j<=je+1; ++j) {
+      for (int j=js; j<=je+dj; ++j) {
 #pragma omp simd
         for (int i=il; i<=iu; ++i) {
-          Real nu_iso = 0.0, nu_para = 0.0, nu_perp = 0.0, nu_wedge = 0.0;
+          Real nu_iso = 0.0; Real nu_para = 0.0; Real nu_perp = 0.0; Real nu_wedge = 0.0;
           Real rho_face = 0.0;
-          Real B = 0.0, Bx = 0.0, By = 0.0, Bz = 0.0;
-          Real bx = 0.0, by = 0.0, bz = 0.0;
-          Real bxx = 0.0, bxy = 0.0, bxz = 0.0, byy = 0.0, byz = 0.0, bzz = 0.0;
-          Real Ixx = 0.0, Ixy = 0.0, Ixz = 0.0, Iyy = 0.0, Iyz = 0.0, Izz = 0.0;
-          Real WIxx = 0.0, WIxy = 0.0, WIxz = 0.0,
-          WIyx = 0.0, WIyy = 0.0, WIyz = 0.0,
-          WIzx = 0.0, WIzy = 0.0, WIzz = 0.0;
-          Real Wbxx = 0.0, Wbxy = 0.0, Wbxz = 0.0,
-          Wbyx = 0.0, Wbyy = 0.0, Wbyz = 0.0,
-          Wbzx = 0.0, Wbzy = 0.0, Wbzz = 0.0;
+          Real B = 0.0; Real Bx = 0.0; Real By = 0.0; Real Bz = 0.0;
+          Real bx = 0.0; Real by = 0.0; Real bz = 0.0;
+          Real bxx = 0.0; Real bxy = 0.0; Real bxz = 0.0;
+          Real byy = 0.0; Real byz = 0.0; Real bzz = 0.0;
+          Real Ixx = 0.0; Real Ixy = 0.0; Real Ixz = 0.0;
+          Real Iyy = 0.0; Real Iyz = 0.0; Real Izz = 0.0;
+          Real WIxx = 0.0; Real WIxy = 0.0; Real WIxz = 0.0;
+          Real WIyx = 0.0; Real WIyy = 0.0; Real WIyz = 0.0;
+          Real WIzx = 0.0; Real WIzy = 0.0; Real WIzz = 0.0;
+          Real Wbxx = 0.0; Real Wbxy = 0.0; Real Wbxz = 0.0;
+          Real Wbyx = 0.0; Real Wbyy = 0.0; Real Wbyz = 0.0;
+          Real Wbzx = 0.0; Real Wbzy = 0.0; Real Wbzz = 0.0;
           Real bWb = 0.0;
-          Real Pi_xx = 0.0, Pi_xy = 0.0, Pi_xz = 0.0,
-          Pi_yx = 0.0, Pi_yy = 0.0, Pi_yz = 0.0,
-          Pi_zx = 0.0, Pi_zy = 0.0, Pi_zz = 0.0;
-          Real Pi_xx_disp = 0.0, Pi_xy_disp = 0.0, Pi_xz_disp = 0.0,
-          Pi_yx_disp = 0.0, Pi_yy_disp = 0.0, Pi_yz_disp = 0.0,
-          Pi_zx_disp = 0.0, Pi_zy_disp = 0.0, Pi_zz_disp = 0.0;
+          Real Pi_yx = 0.0; Real Pi_yy = 0.0; Real Pi_yz = 0.0;
+          Real Pi_yx_disp = 0.0; Real Pi_yy_disp = 0.0; Real Pi_yz_disp = 0.0;
 
-          rho_face = 0.5*(p_i(IDN,k,j,i) + p_i(IDN,k,j-1,i));
+          rho_face = 0.5*(p_i(IDN,k,j,i) + p_i(IDN,k,j-dj,i));
 
           Real dvx_dx =
-          ( 0.5*(p_i(IM1,k,j,  i+1) + p_i(IM1,k,j-1,i+1))
-          - 0.5*(p_i(IM1,k,j,  i-1) + p_i(IM1,k,j-1,i-1)) )
+          ( 0.5*(p_i(IM1,k,j,  i+1) + p_i(IM1,k,j-dj,i+1))
+          - 0.5*(p_i(IM1,k,j,  i-1) + p_i(IM1,k,j-dj,i-1)) )
           / (pco_->dx1v(i-1) + pco_->dx1v(i));
 
           Real dvy_dx =
           pco_->h2v(i)
-          * ( 0.5*(p_i(IM2,k,j,  i+1) + p_i(IM2,k,j-1,i+1)) / pco_->h2v(i+1)
-          - 0.5*(p_i(IM2,k,j,  i-1) + p_i(IM2,k,j-1,i-1)) / pco_->h2v(i-1) )
+          * ( 0.5*(p_i(IM2,k,j,  i+1) + p_i(IM2,k,j-dj,i+1)) / pco_->h2v(i+1)
+          - 0.5*(p_i(IM2,k,j,  i-1) + p_i(IM2,k,j-dj,i-1)) / pco_->h2v(i-1) )
           / (pco_->dx1v(i-1) + pco_->dx1v(i));
 
           Real dvz_dx =
           pco_->h31v(i)
-          * ( 0.5*(p_i(IM3,k,j,  i+1) + p_i(IM3,k,j-1,i+1)) / pco_->h31v(i+1)
-          - 0.5*(p_i(IM3,k,j,  i-1) + p_i(IM3,k,j-1,i-1)) / pco_->h31v(i-1) )
+          * ( 0.5*(p_i(IM3,k,j,  i+1) + p_i(IM3,k,j-dj,i+1)) / pco_->h31v(i+1)
+          - 0.5*(p_i(IM3,k,j,  i-1) + p_i(IM3,k,j-dj,i-1)) / pco_->h31v(i-1) )
           / (pco_->dx1v(i-1) + pco_->dx1v(i));
 
           Real dvx_dy =
-          (p_i(IM1,k,j,i) - p_i(IM1,k,j-1,i))
-          / (pco_->h2v(i) * pco_->dx2v(j-1));
+          (p_i(IM1,k,j,i) - p_i(IM1,k,j-dj,i))
+          / (pco_->h2v(i) * pco_->dx2v(j-dj));
 
           Real dvy_dy =
-          (p_i(IM2,k,j,i) - p_i(IM2,k,j-1,i))
-          / (pco_->h2v(i) * pco_->dx2v(j-1))
-          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j-1,i)) / pco_->h2v(i) * pco_->dh2vd1(i);
+          (p_i(IM2,k,j,i) - p_i(IM2,k,j-dj,i))
+          / (pco_->h2v(i) * pco_->dx2v(j-dj))
+          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j-dj,i)) / pco_->h2v(i) * pco_->dh2vd1(i);
 
           Real dvz_dy =
           pco_->h32f(j)
           * ( p_i(IM3,k,j,  i) / pco_->h32v(j)
-          - p_i(IM3,k,j-1,i) / pco_->h32v(j-1) )
-          / (pco_->h2v(i) * pco_->dx2v(j-1));
+          - p_i(IM3,k,j-dj,i) / pco_->h32v(j-dj) )
+          / (pco_->h2v(i) * pco_->dx2v(j-dj));
 
           Real dvx_dz = !f3 ? 0.0 :
-          0.5*( (p_i(IM1,k+1,j,  i) + p_i(IM1,k+1,j-1,i))
-          - (p_i(IM1,k-1,j,  i) + p_i(IM1,k-1,j-1,i)) )
+          0.5*( (p_i(IM1,k+1,j,  i) + p_i(IM1,k+1,j-dj,i))
+          - (p_i(IM1,k-1,j,  i) + p_i(IM1,k-1,j-dj,i)) )
           / (pco_->h31v(i) * pco_->h32f(j))
           / (pco_->dx3v(k-1) + pco_->dx3v(k));
 
           Real dvy_dz = !f3 ? 0.0 :
-          0.5*( (p_i(IM2,k+1,j,  i) + p_i(IM2,k+1,j-1,i))
-          - (p_i(IM2,k-1,j,  i) + p_i(IM2,k-1,j-1,i)) )
+          0.5*( (p_i(IM2,k+1,j,  i) + p_i(IM2,k+1,j-dj,i))
+          - (p_i(IM2,k-1,j,  i) + p_i(IM2,k-1,j-dj,i)) )
           / (pco_->h31v(i) * pco_->h32f(j))
           / (pco_->dx3v(k-1) + pco_->dx3v(k));
 
           Real dvz_dz = (!f3 ? 0.0 :
-          0.5*( (p_i(IM3,k+1,j,  i) + p_i(IM3,k+1,j-1,i))
-          - (p_i(IM3,k-1,j,  i) + p_i(IM3,k-1,j-1,i)) )
+          0.5*( (p_i(IM3,k+1,j,  i) + p_i(IM3,k+1,j-dj,i))
+          - (p_i(IM3,k-1,j,  i) + p_i(IM3,k-1,j-dj,i)) )
           / (pco_->h31v(i) * pco_->h32f(j))
           / (pco_->dx3v(k-1) + pco_->dx3v(k)))
-          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j-1,i)) * pco_->dh31vd1(i) / pco_->h31v(i)
-          + 0.5*(p_i(IM2,k,j,i) + p_i(IM2,k,j-1,i))
-          * pco_->dh32fd2(j) / (pco_->h32f(j) * pco_->h2v(i));
+          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j-dj,i)) * pco_->dh31vd1(i) / pco_->h31v(i)
+          + 0.5*(p_i(IM2,k,j,i) + p_i(IM2,k,j-dj,i))
+          * pco_->dh32fd2(j)  // theta=0 pole face: avoid 0/0
+          / ((pco_->h32f(j) != 0.0 ? pco_->h32f(j) : 1.0) * pco_->h2v(i));
 
           Real divv = dvx_dx + dvy_dy + dvz_dz;
 
@@ -883,19 +883,19 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
             dvx_dx_t = LimitedTransverse(
             (p_i(IM1,k,j,i+1) - p_i(IM1,k,j,i))/pco_->dx1v(i),
             (p_i(IM1,k,j,i) - p_i(IM1,k,j,i-1))/pco_->dx1v(i-1),
-            (p_i(IM1,k,j-1,i+1) - p_i(IM1,k,j-1,i))/pco_->dx1v(i),
-            (p_i(IM1,k,j-1,i) - p_i(IM1,k,j-1,i-1))/pco_->dx1v(i-1));
+            (p_i(IM1,k,j-dj,i+1) - p_i(IM1,k,j-dj,i))/pco_->dx1v(i),
+            (p_i(IM1,k,j-dj,i) - p_i(IM1,k,j-dj,i-1))/pco_->dx1v(i-1));
 
             dvy_dx_t = LimitedTransverse(
             pco_->h2v(i)*(p_i(IM2,k,j,i+1)/pco_->h2v(i+1) - p_i(IM2,k,j,i)/pco_->h2v(i))
             /pco_->dx1v(i),
             pco_->h2v(i)*(p_i(IM2,k,j,i)/pco_->h2v(i) - p_i(IM2,k,j,i-1)/pco_->h2v(i-1))
             /pco_->dx1v(i-1),
-            pco_->h2v(i)*(p_i(IM2,k,j-1,i+1)/pco_->h2v(i+1)
-            - p_i(IM2,k,j-1,i)/pco_->h2v(i))
+            pco_->h2v(i)*(p_i(IM2,k,j-dj,i+1)/pco_->h2v(i+1)
+            - p_i(IM2,k,j-dj,i)/pco_->h2v(i))
             /pco_->dx1v(i),
-            pco_->h2v(i)*(p_i(IM2,k,j-1,i)/pco_->h2v(i)
-            - p_i(IM2,k,j-1,i-1)/pco_->h2v(i-1))
+            pco_->h2v(i)*(p_i(IM2,k,j-dj,i)/pco_->h2v(i)
+            - p_i(IM2,k,j-dj,i-1)/pco_->h2v(i-1))
             /pco_->dx1v(i-1));
 
             dvz_dx_t = LimitedTransverse(
@@ -905,11 +905,11 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
             pco_->h31v(i)*(p_i(IM3,k,j,i)/pco_->h31v(i)
             - p_i(IM3,k,j,i-1)/pco_->h31v(i-1))
             /pco_->dx1v(i-1),
-            pco_->h31v(i)*(p_i(IM3,k,j-1,i+1)/pco_->h31v(i+1)
-            - p_i(IM3,k,j-1,i)/pco_->h31v(i))
+            pco_->h31v(i)*(p_i(IM3,k,j-dj,i+1)/pco_->h31v(i+1)
+            - p_i(IM3,k,j-dj,i)/pco_->h31v(i))
             /pco_->dx1v(i),
-            pco_->h31v(i)*(p_i(IM3,k,j-1,i)/pco_->h31v(i)
-            - p_i(IM3,k,j-1,i-1)/pco_->h31v(i-1))
+            pco_->h31v(i)*(p_i(IM3,k,j-dj,i)/pco_->h31v(i)
+            - p_i(IM3,k,j-dj,i-1)/pco_->h31v(i-1))
             /pco_->dx1v(i-1));
 
             dvx_dz_t = !f3 ? 0.0 : LimitedTransverse(
@@ -917,9 +917,9 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k)),
             (p_i(IM1,k,j,i) - p_i(IM1,k-1,j,i))
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k-1)),
-            (p_i(IM1,k+1,j-1,i) - p_i(IM1,k,j-1,i))
+            (p_i(IM1,k+1,j-dj,i) - p_i(IM1,k,j-dj,i))
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k)),
-            (p_i(IM1,k,j-1,i) - p_i(IM1,k-1,j-1,i))
+            (p_i(IM1,k,j-dj,i) - p_i(IM1,k-1,j-dj,i))
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k-1)));
 
             dvy_dz_t = !f3 ? 0.0 : LimitedTransverse(
@@ -927,9 +927,9 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k)),
             (p_i(IM2,k,j,i) - p_i(IM2,k-1,j,i))
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k-1)),
-            (p_i(IM2,k+1,j-1,i) - p_i(IM2,k,j-1,i))
+            (p_i(IM2,k+1,j-dj,i) - p_i(IM2,k,j-dj,i))
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k)),
-            (p_i(IM2,k,j-1,i) - p_i(IM2,k-1,j-1,i))
+            (p_i(IM2,k,j-dj,i) - p_i(IM2,k-1,j-dj,i))
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k-1)));
 
 
@@ -938,13 +938,14 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k)),
             (p_i(IM3,k,j,i) - p_i(IM3,k-1,j,i))
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k-1)),
-            (p_i(IM3,k+1,j-1,i) - p_i(IM3,k,j-1,i))
+            (p_i(IM3,k+1,j-dj,i) - p_i(IM3,k,j-dj,i))
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k)),
-            (p_i(IM3,k,j-1,i) - p_i(IM3,k-1,j-1,i))
+            (p_i(IM3,k,j-dj,i) - p_i(IM3,k-1,j-dj,i))
             /(pco_->h31v(i)*pco_->h32f(j)*pco_->dx3v(k-1))))
-            + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j-1,i)) * pco_->dh31vd1(i) / pco_->h31v(i)
-            + 0.5*(p_i(IM2,k,j,i) + p_i(IM2,k,j-1,i))
-            * pco_->dh32fd2(j) / (pco_->h32f(j) * pco_->h2v(i));
+            + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k,j-dj,i)) * pco_->dh31vd1(i) / pco_->h31v(i)
+            + 0.5*(p_i(IM2,k,j,i) + p_i(IM2,k,j-dj,i))
+            * pco_->dh32fd2(j)  // theta=0 pole face: avoid 0/0
+            / ((pco_->h32f(j) != 0.0 ? pco_->h32f(j) : 1.0) * pco_->h2v(i));
           }
 
           Real divv_t = dvx_dx_t + dvy_dy + dvz_dz_t;
@@ -957,12 +958,12 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
 
           Real HII = (HydroDiffusion::nu_aniso_neutral>0.0) ?
           0.5*(HydroDiffusion::ion_frac(k,j,i)
-          + HydroDiffusion::ion_frac(k,j-1,i))
+          + HydroDiffusion::ion_frac(k,j-dj,i))
           : 1.0;
 
           if (use_neutral) { // neutral part is isotropic
             nu_iso =  0.5*(nu(DiffProcess::nu_neutral,k,j,i)
-            + nu(DiffProcess::nu_neutral,k,j-1,i));
+            + nu(DiffProcess::nu_neutral,k,j-dj,i));
 
             Pi_yx += -(1-HII)*rho_face*nu_iso*Wxy_f;
             Pi_yy += -(1-HII)*rho_face*nu_iso*Wyy_f;
@@ -971,17 +972,17 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
 
           // build anisotropic dependencies
           if (use_B) {
-            Bx = 0.5*(pmb_->pfield->bcc(IB1, k,j,i) + pmb_->pfield->bcc(IB1, k,j-1,i));
+            Bx = 0.5*(pmb_->pfield->bcc(IB1, k,j,i) + pmb_->pfield->bcc(IB1, k,j-dj,i));
             By =  pmb_->pfield->b.x2f(k,j,i);
-            Bz = 0.5*(pmb_->pfield->bcc(IB3, k,j,i) + pmb_->pfield->bcc(IB3, k,j-1,i));
+            Bz = 0.5*(pmb_->pfield->bcc(IB3, k,j,i) + pmb_->pfield->bcc(IB3, k,j-dj,i));
             B = std::sqrt(Bx*Bx + By*By + Bz*Bz);
 
             if (B > TINY_NUMBER) {
-              bx = Bx/B;
-              by = By/B;
-              bz = Bz/B;
+            bx = Bx/B;
+            by = By/B;
+            bz = Bz/B;
             } else {
-              bx=by=bz=0.0;
+            bx=by=bz=0.0;
             }
 
             // bb
@@ -1036,7 +1037,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
 
           if (use_para) { // parallel viscosity (Pi0) RF1 eqn(4.129)
             nu_para = 0.5*(nu(DiffProcess::nu_para,k,j,i)
-            + nu(DiffProcess::nu_para,k,j-1,i));
+            + nu(DiffProcess::nu_para,k,j-dj,i));
             Real dp = 1.5 * HII * rho_face * nu_para * bWb;  // p_perp - p_para
             if (lim_p) {
               dp = std::min(std::max(dp, -B*B), 0.5*B*B); // firehose, mirror
@@ -1047,7 +1048,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
           }
           if (use_perp1) { // perpendicular viscosity (Pi1) RF1 eqn(4.130)
             nu_perp = 0.5*(nu(DiffProcess::nu_perp1,k,j,i)
-            + nu(DiffProcess::nu_perp1,k,j-1,i));;
+            + nu(DiffProcess::nu_perp1,k,j-dj,i));;
 
             Real WPerpyx = Ixy*WIxx + Iyy*WIyx + Iyz*WIzx;
             Real WPerpyy = Ixy*WIxy + Iyy*WIyy + Iyz*WIzy;
@@ -1060,7 +1061,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
           }
           if (use_perp2) { // Perpendicular viscosity (Pi2) RF1 eqn(4.131)
             nu_perp = 0.5*(nu(DiffProcess::nu_perp2,k,j,i)
-            + nu(DiffProcess::nu_perp2,k,j-1,i));
+            + nu(DiffProcess::nu_perp2,k,j-dj,i));
             // I_perp dot W dot bb
             Real IWbyx = Ixy*Wbxx + Iyy*Wbyx + Iyz*Wbzx;
             Real IWbyy = Ixy*Wbxy + Iyy*Wbyy + Iyz*Wbzy;
@@ -1078,7 +1079,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
           }
           if (use_wedge1) { // Wedge viscosity Pi3 RF1 eqn(4.132)
             nu_wedge =  0.5*(nu(DiffProcess::nu_wedge1,k,j,i)
-            + nu(DiffProcess::nu_wedge1,k,j-1,i));
+            + nu(DiffProcess::nu_wedge1,k,j-dj,i));
             // I_perp dot W
             Real IWyx = Ixy*Wxx_f + Iyy*Wxy_f + Iyz*Wxz_f;
             Real IWyy = Ixy*Wxy_f + Iyy*Wyy_f + Iyz*Wyz_f;
@@ -1107,7 +1108,7 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
           }
           if (use_wedge2) { // Wedge viscoisty Pi4 RF1 eqn(4.133)
             nu_wedge =  0.5*(nu(DiffProcess::nu_wedge2,k,j,i)
-            + nu(DiffProcess::nu_wedge2,k,j-1,i));
+            + nu(DiffProcess::nu_wedge2,k,j-dj,i));
             // bb dot W
             Real bWyx = bxy*Wxx_f + byy*Wxy_f + byz*Wxz_f;
             Real bWyy = bxy*Wxy_f + byy*Wyy_f + byz*Wyz_f;
@@ -1151,25 +1152,38 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
           }
           if (NON_BAROTROPIC_EOS) {
             if (use_neutral || use_para || use_perp1 || use_perp2) {
-              x2flux(IEN,k,j,i) += 0.5*((p(IM1,k,j-1,i) + p(IM1,k,j,i))*Pi_yx +
-              (p(IM2,k,j-1,i) + p(IM2,k,j,i))*Pi_yy +
-              (p(IM3,k,j-1,i) + p(IM3,k,j,i))*Pi_yz);
+              x2flux(IEN,k,j,i) += 0.5*((p(IM1,k,j-dj,i) + p(IM1,k,j,i))*Pi_yx +
+              (p(IM2,k,j-dj,i) + p(IM2,k,j,i))*Pi_yy +
+              (p(IM3,k,j-dj,i) + p(IM3,k,j,i))*Pi_yz);
             }
             if(use_wedge1 || use_wedge2) {
-              x2flux_disp(IEN,k,j,i) += 0.5*((p(IM1,k,j-1,i) + p(IM1,k,j,i))*Pi_yx_disp +
-                (p(IM2,k,j-1,i) + p(IM2,k,j,i))*Pi_yy_disp +
-                (p(IM3,k,j-1,i) + p(IM3,k,j,i))*Pi_yz_disp);
+              x2flux_disp(IEN,k,j,i) += 0.5*((p(IM1,k,j-dj,i) + p(IM1,k,j,i))*Pi_yx_disp +
+              (p(IM2,k,j-dj,i) + p(IM2,k,j,i))*Pi_yy_disp +
+              (p(IM3,k,j-dj,i) + p(IM3,k,j,i))*Pi_yz_disp);
               if(!STS_ENABLED) {
-                x2flux(IEN,k,j,i) += 0.5*((p(IM1,k,j-1,i) + p(IM1,k,j,i))*Pi_yx_disp +
-                  (p(IM2,k,j-1,i) + p(IM2,k,j,i))*Pi_yy_disp +
-                  (p(IM3,k,j-1,i) + p(IM3,k,j,i))*Pi_yz_disp);
+                x2flux(IEN,k,j,i) += 0.5*((p(IM1,k,j-dj,i) + p(IM1,k,j,i))*Pi_yx_disp +
+                (p(IM2,k,j-dj,i) + p(IM2,k,j,i))*Pi_yy_disp +
+                (p(IM3,k,j-dj,i) + p(IM3,k,j,i))*Pi_yz_disp);
               } // end if STS
             } // end if wedge
           } // end if NON_BAROTROPIC_EOS
         } // i loop
       } // j loop
     } // k loop
-  }  // end if f2
+    if (!f2) { // 1D hoop stress terms
+      const bool wrote_para = use_neutral || use_para || use_perp1 || use_perp2
+      || ((use_wedge1 || use_wedge2) && !STS_ENABLED);
+      const bool wrote_disp = use_wedge1 || use_wedge2;
+      for (int n=IM1; n<NHYDRO; ++n) {
+        for (int k=kl; k<=ku; ++k) {
+          for (int i=il; i<=iu; ++i) {
+            if (wrote_para) x2flux(n,k,je+1,i) = x2flux(n,k,js,i);
+            if (wrote_disp) x2flux_disp(n,k,je+1,i) = x2flux_disp(n,k,js,i);
+          } // i loop
+        } // k loop
+      } // n loop
+    } // end if f2
+  }  // end j direction
 
   il = is, iu = ie, jl = js, ju = je;
   if (MAGNETIC_FIELDS_ENABLED) {
@@ -1178,83 +1192,83 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
     else // 1D MHD limits
       il = is-1, iu = ie+1;
   }
-  if (f3) { // k direction
-    for (int k=ks; k<=ke+1; ++k) {
+  // k direction. 1D and 2D curvilinear runs still get the hoop stress Pi_33.
+  const int dk = f3 ? 1 : 0;
+  { // k direction
+    for (int k=ks; k<=ke+dk; ++k) {
       for (int j=jl; j<=ju; ++j) {
 #pragma omp simd
         for (int i=il; i<=iu; ++i) {
-          Real nu_iso = 0.0, nu_para = 0.0, nu_perp = 0.0, nu_wedge = 0.0;
+          Real nu_iso = 0.0; Real nu_para = 0.0; Real nu_perp = 0.0; Real nu_wedge = 0.0;
           Real rho_face = 0.0;
-          Real B = 0.0, Bx = 0.0, By = 0.0, Bz = 0.0;
-          Real bx = 0.0, by = 0.0, bz = 0.0;
-          Real bxx = 0.0, bxy = 0.0, bxz = 0.0, byy = 0.0, byz = 0.0, bzz = 0.0;
-          Real Ixx = 0.0, Ixy = 0.0, Ixz = 0.0, Iyy = 0.0, Iyz = 0.0, Izz = 0.0;
-          Real WIxx = 0.0, WIxy = 0.0, WIxz = 0.0,
-          WIyx = 0.0, WIyy = 0.0, WIyz = 0.0,
-          WIzx = 0.0, WIzy = 0.0, WIzz = 0.0;
-          Real Wbxx = 0.0, Wbxy = 0.0, Wbxz = 0.0,
-          Wbyx = 0.0, Wbyy = 0.0, Wbyz = 0.0,
-          Wbzx = 0.0, Wbzy = 0.0, Wbzz = 0.0;
+          Real B = 0.0; Real Bx = 0.0; Real By = 0.0; Real Bz = 0.0;
+          Real bx = 0.0; Real by = 0.0; Real bz = 0.0;
+          Real bxx = 0.0; Real bxy = 0.0; Real bxz = 0.0;
+          Real byy = 0.0; Real byz = 0.0; Real bzz = 0.0;
+          Real Ixx = 0.0; Real Ixy = 0.0; Real Ixz = 0.0;
+          Real Iyy = 0.0; Real Iyz = 0.0; Real Izz = 0.0;
+          Real WIxx = 0.0; Real WIxy = 0.0; Real WIxz = 0.0;
+          Real WIyx = 0.0; Real WIyy = 0.0; Real WIyz = 0.0;
+          Real WIzx = 0.0; Real WIzy = 0.0; Real WIzz = 0.0;
+          Real Wbxx = 0.0; Real Wbxy = 0.0; Real Wbxz = 0.0;
+          Real Wbyx = 0.0; Real Wbyy = 0.0; Real Wbyz = 0.0;
+          Real Wbzx = 0.0; Real Wbzy = 0.0; Real Wbzz = 0.0;
           Real bWb = 0.0;
-          Real Pi_xx = 0.0, Pi_xy = 0.0, Pi_xz = 0.0,
-          Pi_yx = 0.0, Pi_yy = 0.0, Pi_yz = 0.0,
-          Pi_zx = 0.0, Pi_zy = 0.0, Pi_zz = 0.0;
-          Real Pi_xx_disp = 0.0, Pi_xy_disp = 0.0, Pi_xz_disp = 0.0,
-          Pi_yx_disp = 0.0, Pi_yy_disp = 0.0, Pi_yz_disp = 0.0,
-          Pi_zx_disp = 0.0, Pi_zy_disp = 0.0, Pi_zz_disp = 0.0;
+          Real Pi_zx = 0.0; Real Pi_zy = 0.0; Real Pi_zz = 0.0;
+          Real Pi_zx_disp = 0.0; Real Pi_zy_disp = 0.0; Real Pi_zz_disp = 0.0;
 
-          rho_face = 0.5*(p_i(IDN,k,j,i) + p_i(IDN,k-1,j,i));
+          rho_face = 0.5*(p_i(IDN,k,j,i) + p_i(IDN,k-dk,j,i));
 
           Real dvx_dx =
-          ( 0.5*(p_i(IM1,k,  j,i+1) + p_i(IM1,k-1,j,i+1))
-          - 0.5*(p_i(IM1,k,  j,i-1) + p_i(IM1,k-1,j,i-1)) )
+          ( 0.5*(p_i(IM1,k,  j,i+1) + p_i(IM1,k-dk,j,i+1))
+          - 0.5*(p_i(IM1,k,  j,i-1) + p_i(IM1,k-dk,j,i-1)) )
           / (pco_->dx1v(i-1) + pco_->dx1v(i));
 
           Real dvy_dx =
           pco_->h2v(i)
-          * ( 0.5*(p_i(IM2,k,  j,i+1) + p_i(IM2,k-1,j,i+1)) / pco_->h2v(i+1)
-          - 0.5*(p_i(IM2,k,  j,i-1) + p_i(IM2,k-1,j,i-1)) / pco_->h2v(i-1) )
+          * ( 0.5*(p_i(IM2,k,  j,i+1) + p_i(IM2,k-dk,j,i+1)) / pco_->h2v(i+1)
+          - 0.5*(p_i(IM2,k,  j,i-1) + p_i(IM2,k-dk,j,i-1)) / pco_->h2v(i-1) )
           / (pco_->dx1v(i-1) + pco_->dx1v(i));
 
           Real dvz_dx =
           pco_->h31v(i)
-          * ( 0.5*(p_i(IM3,k,  j,i+1) + p_i(IM3,k-1,j,i+1)) / pco_->h31v(i+1)
-          - 0.5*(p_i(IM3,k,  j,i-1) + p_i(IM3,k-1,j,i-1)) / pco_->h31v(i-1) )
+          * ( 0.5*(p_i(IM3,k,  j,i+1) + p_i(IM3,k-dk,j,i+1)) / pco_->h31v(i+1)
+          - 0.5*(p_i(IM3,k,  j,i-1) + p_i(IM3,k-dk,j,i-1)) / pco_->h31v(i-1) )
           / (pco_->dx1v(i-1) + pco_->dx1v(i));
 
           Real dvx_dy =
-          0.5*( (p_i(IM1,k,  j+1,i) + p_i(IM1,k-1,j+1,i))
-          - (p_i(IM1,k,  j-1,i) + p_i(IM1,k-1,j-1,i)) )
+          0.5*( (p_i(IM1,k,  j+dj,i) + p_i(IM1,k-dk,j+dj,i))
+          - (p_i(IM1,k,  j-dj,i) + p_i(IM1,k-dk,j-dj,i)) )
           / pco_->h2v(i)
-          / (pco_->dx2v(j-1) + pco_->dx2v(j));
+          / (pco_->dx2v(j-dj) + pco_->dx2v(j));
 
           Real dvy_dy =
-          0.5*( (p_i(IM2,k,  j+1,i) + p_i(IM2,k-1,j+1,i))
-          - (p_i(IM2,k,  j-1,i) + p_i(IM2,k-1,j-1,i)) )
+          0.5*( (p_i(IM2,k,  j+dj,i) + p_i(IM2,k-dk,j+dj,i))
+          - (p_i(IM2,k,  j-dj,i) + p_i(IM2,k-dk,j-dj,i)) )
           / pco_->h2v(i)
-          / (pco_->dx2v(j-1) + pco_->dx2v(j))
-          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k-1,j,i)) * pco_->dh2vd1(i) / pco_->h2v(i);
+          / (pco_->dx2v(j-dj) + pco_->dx2v(j))
+          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k-dk,j,i)) * pco_->dh2vd1(i) / pco_->h2v(i);
 
           Real dvz_dy =
           0.5 * pco_->h32v(j)
-          * ( (p_i(IM3,k,  j+1,i) + p_i(IM3,k-1,j+1,i)) / pco_->h32v(j+1)
-          - (p_i(IM3,k,  j-1,i) + p_i(IM3,k-1,j-1,i)) / pco_->h32v(j-1) )
+          * ( (p_i(IM3,k,  j+dj,i) + p_i(IM3,k-dk,j+dj,i)) / pco_->h32v(j+dj)
+          - (p_i(IM3,k,  j-dj,i) + p_i(IM3,k-dk,j-dj,i)) / pco_->h32v(j-dj) )
           / pco_->h2v(i)
-          / (pco_->dx2v(j-1) + pco_->dx2v(j));
+          / (pco_->dx2v(j-dj) + pco_->dx2v(j));
 
           Real dvx_dz =
-          (p_i(IM1,k,j,i) - p_i(IM1,k-1,j,i))
-          / (pco_->h31v(i) * pco_->h32v(j) * pco_->dx3v(k-1));
+          (p_i(IM1,k,j,i) - p_i(IM1,k-dk,j,i))
+          / (pco_->h31v(i) * pco_->h32v(j) * pco_->dx3v(k-dk));
 
           Real dvy_dz =
-          (p_i(IM2,k,j,i) - p_i(IM2,k-1,j,i))
-          / (pco_->h31v(i) * pco_->h32v(j) * pco_->dx3v(k-1));
+          (p_i(IM2,k,j,i) - p_i(IM2,k-dk,j,i))
+          / (pco_->h31v(i) * pco_->h32v(j) * pco_->dx3v(k-dk));
 
           Real dvz_dz =
-          (p_i(IM3,k,j,i) - p_i(IM3,k-1,j,i))
-          / (pco_->dx3v(k-1) * pco_->h31v(i) * pco_->h32v(j))
-          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k-1,j,i)) * pco_->dh31vd1(i) / pco_->h31v(i)
-          + 0.5*(p_i(IM2,k,j,i) + p_i(IM2,k-1,j,i))
+          (p_i(IM3,k,j,i) - p_i(IM3,k-dk,j,i))
+          / (pco_->dx3v(k-dk) * pco_->h31v(i) * pco_->h32v(j))
+          + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k-dk,j,i)) * pco_->dh31vd1(i) / pco_->h31v(i)
+          + 0.5*(p_i(IM2,k,j,i) + p_i(IM2,k-dk,j,i))
           * pco_->dh32vd2(j) / pco_->h32v(j) / pco_->h2v(i);
 
           Real divv = dvx_dx + dvy_dy + dvz_dz;
@@ -1275,19 +1289,19 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
             dvx_dx_t = LimitedTransverse(
             (p_i(IM1,k,j,i+1) - p_i(IM1,k,j,i))/pco_->dx1v(i),
             (p_i(IM1,k,j,i) - p_i(IM1,k,j,i-1))/pco_->dx1v(i-1),
-            (p_i(IM1,k-1,j,i+1) - p_i(IM1,k-1,j,i))/pco_->dx1v(i),
-            (p_i(IM1,k-1,j,i) - p_i(IM1,k-1,j,i-1))/pco_->dx1v(i-1));
+            (p_i(IM1,k-dk,j,i+1) - p_i(IM1,k-dk,j,i))/pco_->dx1v(i),
+            (p_i(IM1,k-dk,j,i) - p_i(IM1,k-dk,j,i-1))/pco_->dx1v(i-1));
 
             dvy_dx_t = LimitedTransverse(
             pco_->h2v(i)*(p_i(IM2,k,j,i+1)/pco_->h2v(i+1) - p_i(IM2,k,j,i)/pco_->h2v(i))
             /pco_->dx1v(i),
             pco_->h2v(i)*(p_i(IM2,k,j,i)/pco_->h2v(i) - p_i(IM2,k,j,i-1)/pco_->h2v(i-1))
             /pco_->dx1v(i-1),
-            pco_->h2v(i)*(p_i(IM2,k-1,j,i+1)/pco_->h2v(i+1)
-            - p_i(IM2,k-1,j,i)/pco_->h2v(i))
+            pco_->h2v(i)*(p_i(IM2,k-dk,j,i+1)/pco_->h2v(i+1)
+            - p_i(IM2,k-dk,j,i)/pco_->h2v(i))
             /pco_->dx1v(i),
-            pco_->h2v(i)*(p_i(IM2,k-1,j,i)/pco_->h2v(i)
-            - p_i(IM2,k-1,j,i-1)/pco_->h2v(i-1))
+            pco_->h2v(i)*(p_i(IM2,k-dk,j,i)/pco_->h2v(i)
+            - p_i(IM2,k-dk,j,i-1)/pco_->h2v(i-1))
             /pco_->dx1v(i-1));
 
             dvz_dx_t = LimitedTransverse(
@@ -1297,39 +1311,39 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
             pco_->h31v(i)*(p_i(IM3,k,j,i)/pco_->h31v(i)
             - p_i(IM3,k,j,i-1)/pco_->h31v(i-1))
             /pco_->dx1v(i-1),
-            pco_->h31v(i)*(p_i(IM3,k-1,j,i+1)/pco_->h31v(i+1)
-            - p_i(IM3,k-1,j,i)/pco_->h31v(i))
+            pco_->h31v(i)*(p_i(IM3,k-dk,j,i+1)/pco_->h31v(i+1)
+            - p_i(IM3,k-dk,j,i)/pco_->h31v(i))
             /pco_->dx1v(i),
-            pco_->h31v(i)*(p_i(IM3,k-1,j,i)/pco_->h31v(i)
-            - p_i(IM3,k-1,j,i-1)/pco_->h31v(i-1))
+            pco_->h31v(i)*(p_i(IM3,k-dk,j,i)/pco_->h31v(i)
+            - p_i(IM3,k-dk,j,i-1)/pco_->h31v(i-1))
             /pco_->dx1v(i-1));
 
             dvx_dy_t = LimitedTransverse(
-            (p_i(IM1,k,j+1,i) - p_i(IM1,k,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
-            (p_i(IM1,k,j,i) - p_i(IM1,k,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1)),
-            (p_i(IM1,k-1,j+1,i) - p_i(IM1,k-1,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
-            (p_i(IM1,k-1,j,i) - p_i(IM1,k-1,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1)));
+            (p_i(IM1,k,j+dj,i) - p_i(IM1,k,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
+            (p_i(IM1,k,j,i) - p_i(IM1,k,j-dj,i))/(pco_->h2v(i)*pco_->dx2v(j-dj)),
+            (p_i(IM1,k-dk,j+dj,i) - p_i(IM1,k-dk,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
+            (p_i(IM1,k-dk,j,i) - p_i(IM1,k-dk,j-dj,i))/(pco_->h2v(i)*pco_->dx2v(j-dj)));
 
             dvy_dy_t = (LimitedTransverse(
-            (p_i(IM2,k,j+1,i) - p_i(IM2,k,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
-            (p_i(IM2,k,j,i) - p_i(IM2,k,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1)),
-            (p_i(IM2,k-1,j+1,i) - p_i(IM2,k-1,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
-            (p_i(IM2,k-1,j,i) - p_i(IM2,k-1,j-1,i))/(pco_->h2v(i)*pco_->dx2v(j-1))))
-            + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k-1,j,i)) * pco_->dh2vd1(i) / pco_->h2v(i);
+            (p_i(IM2,k,j+dj,i) - p_i(IM2,k,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
+            (p_i(IM2,k,j,i) - p_i(IM2,k,j-dj,i))/(pco_->h2v(i)*pco_->dx2v(j-dj)),
+            (p_i(IM2,k-dk,j+dj,i) - p_i(IM2,k-dk,j,i))/(pco_->h2v(i)*pco_->dx2v(j)),
+            (p_i(IM2,k-dk,j,i) - p_i(IM2,k-dk,j-dj,i))/(pco_->h2v(i)*pco_->dx2v(j-dj))))
+            + 0.5*(p_i(IM1,k,j,i) + p_i(IM1,k-dk,j,i)) * pco_->dh2vd1(i) / pco_->h2v(i);
 
             dvz_dy_t = LimitedTransverse(
-            pco_->h32v(j)*(p_i(IM3,k,j+1,i)/pco_->h32v(j+1)
+            pco_->h32v(j)*(p_i(IM3,k,j+dj,i)/pco_->h32v(j+dj)
             - p_i(IM3,k,j,i)/pco_->h32v(j))
             /(pco_->h2v(i)*pco_->dx2v(j)),
             pco_->h32v(j)*(p_i(IM3,k,j,i)/pco_->h32v(j)
-            - p_i(IM3,k,j-1,i)/pco_->h32v(j-1))
-            /(pco_->h2v(i)*pco_->dx2v(j-1)),
-            pco_->h32v(j)*(p_i(IM3,k-1,j+1,i)/pco_->h32v(j+1)
-            - p_i(IM3,k-1,j,i)/pco_->h32v(j))
+            - p_i(IM3,k,j-dj,i)/pco_->h32v(j-dj))
+            /(pco_->h2v(i)*pco_->dx2v(j-dj)),
+            pco_->h32v(j)*(p_i(IM3,k-dk,j+dj,i)/pco_->h32v(j+dj)
+            - p_i(IM3,k-dk,j,i)/pco_->h32v(j))
             /(pco_->h2v(i)*pco_->dx2v(j)),
-            pco_->h32v(j)*(p_i(IM3,k-1,j,i)/pco_->h32v(j)
-            - p_i(IM3,k-1,j-1,i)/pco_->h32v(j-1))
-            /(pco_->h2v(i)*pco_->dx2v(j-1)));
+            pco_->h32v(j)*(p_i(IM3,k-dk,j,i)/pco_->h32v(j)
+            - p_i(IM3,k-dk,j-dj,i)/pco_->h32v(j-dj))
+            /(pco_->h2v(i)*pco_->dx2v(j-dj)));
           }
           Real divv_t = dvx_dx_t + dvy_dy_t + dvz_dz;
           Real Wxx_t = 2.0*(dvx_dx_t - divv_t/3.0);
@@ -1341,223 +1355,236 @@ void HydroDiffusion::ViscousFluxAniso(const AthenaArray<Real> &p,
 
           Real HII = (HydroDiffusion::nu_aniso_neutral>0.0) ?
           0.5*(HydroDiffusion::ion_frac(k,j,i)
-          + HydroDiffusion::ion_frac(k-1,j,i))
+          + HydroDiffusion::ion_frac(k-dk,j,i))
           : 1.0;
 
           if (use_neutral) { // neutral part is isotropic
-          nu_iso = 0.5*(nu(DiffProcess::nu_neutral,k,j,i)
-          + nu(DiffProcess::nu_neutral,k-1,j,i));
-          Pi_zx += -(1-HII)*rho_face*nu_iso*Wxz_f;
-          Pi_zy += -(1-HII)*rho_face*nu_iso*Wyz_f;
-          Pi_zz += -(1-HII)*rho_face*nu_iso*Wzz_f;
+            nu_iso = 0.5*(nu(DiffProcess::nu_neutral,k,j,i)
+            + nu(DiffProcess::nu_neutral,k-dk,j,i));
+            Pi_zx += -(1-HII)*rho_face*nu_iso*Wxz_f;
+            Pi_zy += -(1-HII)*rho_face*nu_iso*Wyz_f;
+            Pi_zz += -(1-HII)*rho_face*nu_iso*Wzz_f;
           }
 
           // build anisotropic dependencies
           if (use_B) {
-          Bx = 0.5*(pmb_->pfield->bcc(IB1, k,j,i) + pmb_->pfield->bcc(IB1,k-1,j,i));
-          By = 0.5*(pmb_->pfield->bcc(IB2,k,j,i) + pmb_->pfield->bcc(IB2,k-1,j,i));
-          Bz = pmb_->pfield->b.x3f(k,j,i);
-          B = std::sqrt(Bx*Bx + By*By + Bz*Bz);
+            Bx = 0.5*(pmb_->pfield->bcc(IB1, k,j,i) + pmb_->pfield->bcc(IB1,k-dk,j,i));
+            By = 0.5*(pmb_->pfield->bcc(IB2,k,j,i) + pmb_->pfield->bcc(IB2,k-dk,j,i));
+            Bz = pmb_->pfield->b.x3f(k,j,i);
+            B = std::sqrt(Bx*Bx + By*By + Bz*Bz);
 
-          if (B > TINY_NUMBER) {
-          bx = Bx/B;
-          by = By/B;
-          bz = Bz/B;
-          } else {
-          bx=by=bz=0.0;
-          }
+            if (B > TINY_NUMBER) {
+              bx = Bx/B;
+              by = By/B;
+              bz = Bz/B;
+            } else {
+              bx=by=bz=0.0;
+            }
 
-          // bb
-          bxx = bx*bx;
-          bxy = bx*by;
-          bxz = bx*bz;
-          byy = by*by;
-          byz = by*bz;
-          bzz = bz*bz;
+            // bb
+            bxx = bx*bx;
+            bxy = bx*by;
+            bxz = bx*bz;
+            byy = by*by;
+            byz = by*bz;
+            bzz = bz*bz;
 
-          // b dot W dot b
-          Real wbx = Wxx_t*bx + Wxy_t*by + Wxz_t*bz;
-          Real wby = Wxy_t*bx + Wyy_t*by + Wyz_t*bz;
-          Real wbz = Wxz_t*bx + Wyz_t*by + Wzz_t*bz;
-          bWb = bx*wbx + by*wby + bz*wbz;
+            // b dot W dot b
+            Real wbx = Wxx_t*bx + Wxy_t*by + Wxz_t*bz;
+            Real wby = Wxy_t*bx + Wyy_t*by + Wyz_t*bz;
+            Real wbz = Wxz_t*bx + Wyz_t*by + Wzz_t*bz;
+            bWb = bx*wbx + by*wby + bz*wbz;
           }
           if (use_I) {
-          // I_perp tensor
-          Ixx = 1-bxx;
-          Ixy = -bxy;
-          Ixz = -bxz;
-          Iyy = 1-byy;
-          Iyz = -byz;
-          Izz = 1-bzz;
+            // I_perp tensor
+            Ixx = 1-bxx;
+            Ixy = -bxy;
+            Ixz = -bxz;
+            Iyy = 1-byy;
+            Iyz = -byz;
+            Izz = 1-bzz;
 
-          // W dot I_perp
-          WIxx = Wxx_t*Ixx + Wxy_t*Ixy + Wxz_t*Ixz;
-          WIxy = Wxx_t*Ixy + Wxy_t*Iyy + Wxz_t*Iyz;
-          WIxz = Wxx_t*Ixz + Wxy_t*Iyz + Wxz_t*Izz;
+            // W dot I_perp
+            WIxx = Wxx_t*Ixx + Wxy_t*Ixy + Wxz_t*Ixz;
+            WIxy = Wxx_t*Ixy + Wxy_t*Iyy + Wxz_t*Iyz;
+            WIxz = Wxx_t*Ixz + Wxy_t*Iyz + Wxz_t*Izz;
 
-          WIyx = Wxy_t*Ixx + Wyy_t*Ixy + Wyz_t*Ixz;
-          WIyy = Wxy_t*Ixy + Wyy_t*Iyy + Wyz_t*Iyz;
-          WIyz = Wxy_t*Ixz + Wyy_t*Iyz + Wyz_t*Izz;
+            WIyx = Wxy_t*Ixx + Wyy_t*Ixy + Wyz_t*Ixz;
+            WIyy = Wxy_t*Ixy + Wyy_t*Iyy + Wyz_t*Iyz;
+            WIyz = Wxy_t*Ixz + Wyy_t*Iyz + Wyz_t*Izz;
 
-          WIzx = Wxz_t*Ixx + Wyz_t*Ixy + Wzz_t*Ixz;
-          WIzy = Wxz_t*Ixy + Wyz_t*Iyy + Wzz_t*Iyz;
-          WIzz = Wxz_t*Ixz + Wyz_t*Iyz + Wzz_t*Izz;
+            WIzx = Wxz_t*Ixx + Wyz_t*Ixy + Wzz_t*Ixz;
+            WIzy = Wxz_t*Ixy + Wyz_t*Iyy + Wzz_t*Iyz;
+            WIzz = Wxz_t*Ixz + Wyz_t*Iyz + Wzz_t*Izz;
           }
 
           if (use_Wbb) {
-          // W dot bb
-          Wbxx = Wxx_t*bxx + Wxy_t*bxy + Wxz_t*bxz;
-          Wbxy = Wxx_t*bxy + Wxy_t*byy + Wxz_t*byz;
-          Wbxz = Wxx_t*bxz + Wxy_t*byz + Wxz_t*bzz;
+            // W dot bb
+            Wbxx = Wxx_t*bxx + Wxy_t*bxy + Wxz_t*bxz;
+            Wbxy = Wxx_t*bxy + Wxy_t*byy + Wxz_t*byz;
+            Wbxz = Wxx_t*bxz + Wxy_t*byz + Wxz_t*bzz;
 
-          Wbyx = Wxy_t*bxx + Wyy_t*bxy + Wyz_t*bxz;
-          Wbyy = Wxy_t*bxy + Wyy_t*byy + Wyz_t*byz;
-          Wbyz = Wxy_t*bxz + Wyy_t*byz + Wyz_t*bzz;
+            Wbyx = Wxy_t*bxx + Wyy_t*bxy + Wyz_t*bxz;
+            Wbyy = Wxy_t*bxy + Wyy_t*byy + Wyz_t*byz;
+            Wbyz = Wxy_t*bxz + Wyy_t*byz + Wyz_t*bzz;
 
-          Wbzx = Wxz_t*bxx + Wyz_t*bxy + Wzz_t*bxz;
-          Wbzy = Wxz_t*bxy + Wyz_t*byy + Wzz_t*byz;
-          Wbzz = Wxz_t*bxz + Wyz_t*byz + Wzz_t*bzz;
+            Wbzx = Wxz_t*bxx + Wyz_t*bxy + Wzz_t*bxz;
+            Wbzy = Wxz_t*bxy + Wyz_t*byy + Wzz_t*byz;
+            Wbzz = Wxz_t*bxz + Wyz_t*byz + Wzz_t*bzz;
           }
           if (use_para) { // parallel viscosity (Pi0) RF1 eqn(4.129)
-          nu_para = 0.5*(nu(DiffProcess::nu_para,k,j,i)
-          + nu(DiffProcess::nu_para,k-1,j,i));
-          Real dp = 1.5 * HII * rho_face * nu_para * bWb;  // p_perp - p_para
-          if (lim_p) {
-          dp = std::min(std::max(dp, -B*B), 0.5*B*B); // firehose, mirror
-          } // Pi0
-          Pi_zx += -dp * bxz;
-          Pi_zy += -dp * byz;
-          Pi_zz += -dp * (bzz - 1.0/3.0);
+            nu_para = 0.5*(nu(DiffProcess::nu_para,k,j,i)
+            + nu(DiffProcess::nu_para,k-dk,j,i));
+            Real dp = 1.5 * HII * rho_face * nu_para * bWb;  // p_perp - p_para
+            if (lim_p) {
+              dp = std::min(std::max(dp, -B*B), 0.5*B*B); // firehose, mirror
+            } // Pi0
+            Pi_zx += -dp * bxz;
+            Pi_zy += -dp * byz;
+            Pi_zz += -dp * (bzz - 1.0/3.0);
           }
 
           if (use_perp1) { // perpendicular viscosity (Pi1) RF1 eqn(4.130)
-          nu_perp = 0.5*(nu(DiffProcess::nu_perp1,k,j,i)
-          + nu(DiffProcess::nu_perp1,k-1,j,i));
+            nu_perp = 0.5*(nu(DiffProcess::nu_perp1,k,j,i)
+            + nu(DiffProcess::nu_perp1,k-dk,j,i));
 
-          // W_Perp = I_Perp dot W_Perp dot I_Perp
-          Real WPerpzx = Ixz*WIxx + Iyz*WIyx + Izz*WIzx;
-          Real WPerpzy = Ixz*WIxy + Iyz*WIyy + Izz*WIzy;
-          Real WPerpzz = Ixz*WIxz + Iyz*WIyz + Izz*WIzz;
+            // W_Perp = I_Perp dot W_Perp dot I_Perp
+            Real WPerpzx = Ixz*WIxx + Iyz*WIyx + Izz*WIzx;
+            Real WPerpzy = Ixz*WIxy + Iyz*WIyy + Izz*WIzy;
+            Real WPerpzz = Ixz*WIxz + Iyz*WIyz + Izz*WIzz;
 
-          // Pi1
-          Pi_zx += -HII * rho_face * nu_perp * (WPerpzx + 0.5*(-bxz)*bWb);
-          Pi_zy += -HII * rho_face * nu_perp * (WPerpzy + 0.5*(-byz)*bWb);
-          Pi_zz += -HII * rho_face * nu_perp * (WPerpzz + 0.5*(1.0-bzz)*bWb);
+            // Pi1
+            Pi_zx += -HII * rho_face * nu_perp * (WPerpzx + 0.5*(-bxz)*bWb);
+            Pi_zy += -HII * rho_face * nu_perp * (WPerpzy + 0.5*(-byz)*bWb);
+            Pi_zz += -HII * rho_face * nu_perp * (WPerpzz + 0.5*(1.0-bzz)*bWb);
           }
           if (use_perp2) { // Perendicular viscoisty (Pi2) RF1 eqn(4.131)
-          nu_perp = 0.5*(nu(DiffProcess::nu_perp2,k,j,i)
-          + nu(DiffProcess::nu_perp2,k-1,j,i));
-          // I_perp dot W dot bb
-          Real IWbzx = Ixz*Wbxx + Iyz*Wbyx + Izz*Wbzx;
-          Real IWbzy = Ixz*Wbxy + Iyz*Wbyy + Izz*Wbzy;
-          Real IWbzz = Ixz*Wbxz + Iyz*Wbyz + Izz*Wbzz;
+            nu_perp = 0.5*(nu(DiffProcess::nu_perp2,k,j,i)
+            + nu(DiffProcess::nu_perp2,k-dk,j,i));
+            // I_perp dot W dot bb
+            Real IWbzx = Ixz*Wbxx + Iyz*Wbyx + Izz*Wbzx;
+            Real IWbzy = Ixz*Wbxy + Iyz*Wbyy + Izz*Wbzy;
+            Real IWbzz = Ixz*Wbxz + Iyz*Wbyz + Izz*Wbzz;
 
-          // bb dot W dot I_Perp
-          Real bWIzx = bxz*WIxx + byz*WIyx + bzz*WIzx;
-          Real bWIzy = bxz*WIxy + byz*WIyy + bzz*WIzy;
-          Real bWIzz = bxz*WIxz + byz*WIyz + bzz*WIzz;
+            // bb dot W dot I_Perp
+            Real bWIzx = bxz*WIxx + byz*WIyx + bzz*WIzx;
+            Real bWIzy = bxz*WIxy + byz*WIyy + bzz*WIzy;
+            Real bWIzz = bxz*WIxz + byz*WIyz + bzz*WIzz;
 
-          // Pi 2
-          Pi_zx += -HII * rho_face * nu_perp * 4* (IWbzx + bWIzx);
-          Pi_zy += -HII * rho_face * nu_perp * 4* (IWbzy + bWIzy);
-          Pi_zz += -HII * rho_face * nu_perp * 4* (IWbzz + bWIzz);
+            // Pi 2
+            Pi_zx += -HII * rho_face * nu_perp * 4* (IWbzx + bWIzx);
+            Pi_zy += -HII * rho_face * nu_perp * 4* (IWbzy + bWIzy);
+            Pi_zz += -HII * rho_face * nu_perp * 4* (IWbzz + bWIzz);
           }
           if (use_wedge1) { // Wedge viscoisty (Pi3) RF1 eqn(4.132)
-          nu_wedge =  0.5*(nu(DiffProcess::nu_wedge1,k,j,i)
-          + nu(DiffProcess::nu_wedge1,k-1,j,i));
+            nu_wedge =  0.5*(nu(DiffProcess::nu_wedge1,k,j,i)
+            + nu(DiffProcess::nu_wedge1,k-dk,j,i));
 
-          // I_perp dot W
-          Real IWzx = Ixz*Wxx_f + Iyz*Wxy_f + Izz*Wxz_f;
-          Real IWzy = Ixz*Wxy_f + Iyz*Wyy_f + Izz*Wyz_f;
-          Real IWzz = Ixz*Wxz_f + Iyz*Wyz_f + Izz*Wzz_f;
+            // I_perp dot W
+            Real IWzx = Ixz*Wxx_f + Iyz*Wxy_f + Izz*Wxz_f;
+            Real IWzy = Ixz*Wxy_f + Iyz*Wyy_f + Izz*Wyz_f;
+            Real IWzz = Ixz*Wxz_f + Iyz*Wyz_f + Izz*Wzz_f;
 
-          // b cross WI
-          Real cWIxx = Wxx_f*Ixx + Wxy_f*Ixy + Wxz_f*Ixz;
-          Real cWIxy = Wxx_f*Ixy + Wxy_f*Iyy + Wxz_f*Iyz;
-          Real cWIxz = Wxx_f*Ixz + Wxy_f*Iyz + Wxz_f*Izz;
-          Real cWIyx = Wxy_f*Ixx + Wyy_f*Ixy + Wyz_f*Ixz;
-          Real cWIyy = Wxy_f*Ixy + Wyy_f*Iyy + Wyz_f*Iyz;
-          Real cWIyz = Wxy_f*Ixz + Wyy_f*Iyz + Wyz_f*Izz;
-          Real bcWIzx = bx*cWIyx - by*cWIxx;
-          Real bcWIzy = bx*cWIyy - by*cWIxy;
-          Real bcWIzz = bx*cWIyz - by*cWIxz;
+            // b cross WI
+            Real cWIxx = Wxx_f*Ixx + Wxy_f*Ixy + Wxz_f*Ixz;
+            Real cWIxy = Wxx_f*Ixy + Wxy_f*Iyy + Wxz_f*Iyz;
+            Real cWIxz = Wxx_f*Ixz + Wxy_f*Iyz + Wxz_f*Izz;
+            Real cWIyx = Wxy_f*Ixx + Wyy_f*Ixy + Wyz_f*Ixz;
+            Real cWIyy = Wxy_f*Ixy + Wyy_f*Iyy + Wyz_f*Iyz;
+            Real cWIyz = Wxy_f*Ixz + Wyy_f*Iyz + Wyz_f*Izz;
+            Real bcWIzx = bx*cWIyx - by*cWIxx;
+            Real bcWIzy = bx*cWIyy - by*cWIxy;
+            Real bcWIzz = bx*cWIyz - by*cWIxz;
 
-          // IW cross B
-          Real IWcbzx = IWzy*bz - IWzz*by;
-          Real IWcbzy = IWzz*bx - IWzx*bz;
-          Real IWcbzz = IWzx*by - IWzy*bx;
+            // IW cross B
+            Real IWcbzx = IWzy*bz - IWzz*by;
+            Real IWcbzy = IWzz*bx - IWzx*bz;
+            Real IWcbzz = IWzx*by - IWzy*bx;
 
-          // Pi 3
-          Pi_zx_disp += HII*0.5*rho_face*nu_wedge*(bcWIzx - IWcbzx);
-          Pi_zy_disp += HII*0.5*rho_face*nu_wedge*(bcWIzy - IWcbzy);
-          Pi_zz_disp += HII*0.5*rho_face*nu_wedge*(bcWIzz - IWcbzz);
+            // Pi 3
+            Pi_zx_disp += HII*0.5*rho_face*nu_wedge*(bcWIzx - IWcbzx);
+            Pi_zy_disp += HII*0.5*rho_face*nu_wedge*(bcWIzy - IWcbzy);
+            Pi_zz_disp += HII*0.5*rho_face*nu_wedge*(bcWIzz - IWcbzz);
           }
           if (use_wedge2) { // Wedge viscoisty (Pi4) RF1 eqn(4.133)
-          nu_wedge =  0.5*(nu(DiffProcess::nu_wedge2,k,j,i)
-          + nu(DiffProcess::nu_wedge2,k-1,j,i));
+            nu_wedge =  0.5*(nu(DiffProcess::nu_wedge2,k,j,i)
+            + nu(DiffProcess::nu_wedge2,k-dk,j,i));
 
-          // bb dot W
-          Real bWzx = bxz*Wxx_f + byz*Wxy_f + bzz*Wxz_f;
-          Real bWzy = bxz*Wxy_f + byz*Wyy_f + bzz*Wyz_f;
-          Real bWzz = bxz*Wxz_f + byz*Wyz_f + bzz*Wzz_f;
+            // bb dot W
+            Real bWzx = bxz*Wxx_f + byz*Wxy_f + bzz*Wxz_f;
+            Real bWzy = bxz*Wxy_f + byz*Wyy_f + bzz*Wyz_f;
+            Real bWzz = bxz*Wxz_f + byz*Wyz_f + bzz*Wzz_f;
 
-          // b cross (W dot bb)
-          Real cWbxx = Wxx_f*bxx + Wxy_f*bxy + Wxz_f*bxz;
-          Real cWbxy = Wxx_f*bxy + Wxy_f*byy + Wxz_f*byz;
-          Real cWbxz = Wxx_f*bxz + Wxy_f*byz + Wxz_f*bzz;
-          Real cWbyx = Wxy_f*bxx + Wyy_f*bxy + Wyz_f*bxz;
-          Real cWbyy = Wxy_f*bxy + Wyy_f*byy + Wyz_f*byz;
-          Real cWbyz = Wxy_f*bxz + Wyy_f*byz + Wyz_f*bzz;
-          Real bcWbzx = bx*cWbyx - by*cWbxx;
-          Real bcWbzy = bx*cWbyy - by*cWbxy;
-          Real bcWbzz = bx*cWbyz - by*cWbxz;
+            // b cross (W dot bb)
+            Real cWbxx = Wxx_f*bxx + Wxy_f*bxy + Wxz_f*bxz;
+            Real cWbxy = Wxx_f*bxy + Wxy_f*byy + Wxz_f*byz;
+            Real cWbxz = Wxx_f*bxz + Wxy_f*byz + Wxz_f*bzz;
+            Real cWbyx = Wxy_f*bxx + Wyy_f*bxy + Wyz_f*bxz;
+            Real cWbyy = Wxy_f*bxy + Wyy_f*byy + Wyz_f*byz;
+            Real cWbyz = Wxy_f*bxz + Wyy_f*byz + Wyz_f*bzz;
+            Real bcWbzx = bx*cWbyx - by*cWbxx;
+            Real bcWbzy = bx*cWbyy - by*cWbxy;
+            Real bcWbzz = bx*cWbyz - by*cWbxz;
 
-          // (bb dot W) cross b
-          Real bWcbzx = bWzy*bz - bWzz*by;
-          Real bWcbzy = bWzz*bx - bWzx*bz;
-          Real bWcbzz = bWzx*by - bWzy*bx;
+            // (bb dot W) cross b
+            Real bWcbzx = bWzy*bz - bWzz*by;
+            Real bWcbzy = bWzz*bx - bWzx*bz;
+            Real bWcbzz = bWzx*by - bWzy*bx;
 
-          // Pi 4
-          Pi_zx_disp += HII*2*rho_face*nu_wedge*(bcWbzx - bWcbzx);
-          Pi_zy_disp += HII*2*rho_face*nu_wedge*(bcWbzy - bWcbzy);
-          Pi_zz_disp += HII*2*rho_face*nu_wedge*(bcWbzz - bWcbzz);
+            // Pi 4
+            Pi_zx_disp += HII*2*rho_face*nu_wedge*(bcWbzx - bWcbzx);
+            Pi_zy_disp += HII*2*rho_face*nu_wedge*(bcWbzy - bWcbzy);
+            Pi_zz_disp += HII*2*rho_face*nu_wedge*(bcWbzz - bWcbzz);
           }
           if (use_neutral || use_para || use_perp1 || use_perp2) {
-          x3flux(IM1,k,j,i) += Pi_zx;
-          x3flux(IM2,k,j,i) += Pi_zy;
-          x3flux(IM3,k,j,i) += Pi_zz;
+            x3flux(IM1,k,j,i) += Pi_zx;
+            x3flux(IM2,k,j,i) += Pi_zy;
+            x3flux(IM3,k,j,i) += Pi_zz;
           }
           if (use_wedge1 || use_wedge2) {
-          x3flux_disp(IM1,k,j,i) += Pi_zx_disp;
-          x3flux_disp(IM2,k,j,i) += Pi_zy_disp;
-          x3flux_disp(IM3,k,j,i) += Pi_zz_disp;
-          if (!STS_ENABLED) {
-          x3flux(IM1,k,j,i) += Pi_zx_disp;
-          x3flux(IM2,k,j,i) += Pi_zy_disp;
-          x3flux(IM3,k,j,i) += Pi_zz_disp;
-          }
+            x3flux_disp(IM1,k,j,i) += Pi_zx_disp;
+            x3flux_disp(IM2,k,j,i) += Pi_zy_disp;
+            x3flux_disp(IM3,k,j,i) += Pi_zz_disp;
+            if (!STS_ENABLED) {
+              x3flux(IM1,k,j,i) += Pi_zx_disp;
+              x3flux(IM2,k,j,i) += Pi_zy_disp;
+              x3flux(IM3,k,j,i) += Pi_zz_disp;
+            }
           }
           if (NON_BAROTROPIC_EOS) {
             if (use_neutral || use_para || use_perp1 || use_perp2) {
-            x3flux(IEN,k,j,i) += 0.5*((p(IM1,k-1,j,i) + p(IM1,k,j,i))*Pi_zx +
-              (p(IM2,k-1,j,i) + p(IM2,k,j,i))*Pi_zy +
-              (p(IM3,k-1,j,i) + p(IM3,k,j,i))*Pi_zz);
+              x3flux(IEN,k,j,i) += 0.5*((p(IM1,k-dk,j,i) + p(IM1,k,j,i))*Pi_zx +
+              (p(IM2,k-dk,j,i) + p(IM2,k,j,i))*Pi_zy +
+              (p(IM3,k-dk,j,i) + p(IM3,k,j,i))*Pi_zz);
             }
             if (use_wedge1 || use_wedge2) {
-            x3flux_disp(IEN,k,j,i) += 0.5*((p(IM1,k-1,j,i) + p(IM1,k,j,i))*Pi_zx_disp +
-                  (p(IM2,k-1,j,i) + p(IM2,k,j,i))*Pi_zy_disp +
-                  (p(IM3,k-1,j,i) + p(IM3,k,j,i))*Pi_zz_disp);
+              x3flux_disp(IEN,k,j,i) += 0.5*((p(IM1,k-dk,j,i) + p(IM1,k,j,i))*Pi_zx_disp +
+              (p(IM2,k-dk,j,i) + p(IM2,k,j,i))*Pi_zy_disp +
+              (p(IM3,k-dk,j,i) + p(IM3,k,j,i))*Pi_zz_disp);
               if (!STS_ENABLED) {
-              x3flux(IEN,k,j,i) += 0.5*((p(IM1,k-1,j,i) + p(IM1,k,j,i))*Pi_zx_disp
-                                      + (p(IM2,k-1,j,i) + p(IM2,k,j,i))*Pi_zy_disp
-                                      + (p(IM3,k-1,j,i) + p(IM3,k,j,i))*Pi_zz_disp);
+              x3flux(IEN,k,j,i) += 0.5*((p(IM1,k-dk,j,i) + p(IM1,k,j,i))*Pi_zx_disp
+                + (p(IM2,k-dk,j,i) + p(IM2,k,j,i))*Pi_zy_disp
+                + (p(IM3,k-dk,j,i) + p(IM3,k,j,i))*Pi_zz_disp);
               } // end if STS
             } // end if wedge
           } // end if NON_BAROTROPIC_EOS
         } // i loop
       } // j loop
     } // k loop
-  } // end if f3
+      if (!f3) { // 2D hoop stress terms
+      const bool wrote_para = use_neutral || use_para || use_perp1 || use_perp2
+      || ((use_wedge1 || use_wedge2) && !STS_ENABLED);
+      const bool wrote_disp = use_wedge1 || use_wedge2;
+      for (int n=IM1; n<NHYDRO; ++n) {
+        for (int j=jl; j<=ju; ++j) {
+          for (int i=il; i<=iu; ++i) {
+            if (wrote_para) x3flux(n,ke+1,j,i) = x3flux(n,ks,j,i);
+            if (wrote_disp) x3flux_disp(n,ke+1,j,i) = x3flux_disp(n,ks,j,i);
+          } // i loop
+        } // j loop
+      } // n loop
+    } // end if f3
+  } // end k direction
   return;
 }
 
