@@ -529,6 +529,11 @@ void Coordinates::AddCoordTermsDivergence(const Real dt, const AthenaArray<Real>
             m_ii += 0.5*(hd.visflx[X2DIR](IM2,k,j+1,i) + hd.visflx[X2DIR](IM2,k,j,i));
             m_ii += 0.5*(hd.visflx[X3DIR](IM3,k+1,j,i) + hd.visflx[X3DIR](IM3,k,j,i));
           }
+        } else if (hd.visc_disp_defined) {  // STS on: gyroviscous stress
+          m_ii += 0.5*(hd.visflx_disp[X2DIR](IM2,k,j+1,i)
+                       + hd.visflx_disp[X2DIR](IM2,k,j,i));
+          m_ii += 0.5*(hd.visflx_disp[X3DIR](IM3,k+1,j,i)
+                       + hd.visflx_disp[X3DIR](IM3,k,j,i));
         }
 
         u(IM1,k,j,i) += dt*coord_src1_i_(i)*m_ii;
@@ -557,6 +562,9 @@ void Coordinates::AddCoordTermsDivergence(const Real dt, const AthenaArray<Real>
         if (!STS_ENABLED) {
           if (do_hydro_diffusion)
             m_pp += 0.5*(hd.visflx[X3DIR](IM3,k+1,j,i) + hd.visflx[X3DIR](IM3,k,j,i));
+        } else if (hd.visc_disp_defined) {  // STS on: gyroviscous stress
+          m_pp += 0.5*(hd.visflx_disp[X3DIR](IM3,k+1,j,i)
+                       + hd.visflx_disp[X3DIR](IM3,k,j,i));
         }
 
         u(IM2,k,j,i) += dt*coord_src1_i_(i)*coord_src1_j_(j)*m_pp;

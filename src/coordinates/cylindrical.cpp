@@ -325,6 +325,9 @@ void Coordinates::AddCoordTermsDivergence(
         if (!STS_ENABLED) {
           if (do_hydro_diffusion)
             m_pp += 0.5*(hd.visflx[X2DIR](IM2,k,j+1,i) + hd.visflx[X2DIR](IM2,k,j,i));
+        } else if (hd.visc_disp_defined) {  // STS on: gyroviscous stress
+          m_pp += 0.5*(hd.visflx_disp[X2DIR](IM2,k,j+1,i)
+                       + hd.visflx_disp[X2DIR](IM2,k,j,i));
         }
         u(IM1,k,j,i) += dt*coord_src1_i_(i)*m_pp;
 
